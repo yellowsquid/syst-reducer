@@ -1,0 +1,9 @@
+package church-eval
+authors = "Greg Brown"
+sourcedir = "src"
+
+options = "--total"
+
+modules
+  = Term
+  , Thinning
