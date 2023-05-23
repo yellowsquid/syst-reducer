@@ -5,5 +5,7 @@ sourcedir = "src"
 options = "--total"
 
 modules
-  = Term
+  = Level0
+  , NormalForm
+  , Term
   , Thinning

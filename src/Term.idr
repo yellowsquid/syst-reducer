@@ -1,14 +1,13 @@
 module Term
 
-import Data.SnocList
 import Data.SnocList.Elem
-import Data.SnocList.Quantifiers
 import Thinning
 
 infixr 20 ~>
 
 -- Types -----------------------------------------------------------------------
 
+public export
 data Ty : Type where
   N : Ty
   (~>) : Ty -> Ty -> Ty
@@ -17,7 +16,9 @@ data Ty : Type where
 
 -- Terms -----------------------------------------------------------------------
 
+public export
 data Term : SnocList Ty -> Ty -> Type
+public export
 data Subst : SnocList Ty -> SnocList Ty -> Type
 
 data Term where
@@ -40,14 +41,16 @@ shift : Subst ctx ctx' -> Subst (ctx :< ty) ctx'
 shift (Base thin) = Base (Drop thin)
 shift (sub :< t) = shift sub :< Sub t (Base (Drop Id))
 
+export
 lift : Subst ctx ctx' -> Subst (ctx :< ty) (ctx' :< ty)
 lift (Base thin) = Base (keep thin)
 lift (sub :< t) = shift (sub :< t) :< Var Here
 
-indexSubst : Subst ctx' ctx -> Elem ty ctx -> Term ctx' ty
-indexSubst (Base thin) i = Var (index thin i)
-indexSubst (sub :< t) Here = t
-indexSubst (sub :< t) (There i) = indexSubst sub i
+export
+index : Subst ctx' ctx -> Elem ty ctx -> Term ctx' ty
+index (Base thin) i = Var (index thin i)
+index (sub :< t) Here = t
+index (sub :< t) (There i) = index sub i
 
 restrict : Subst ctx1 ctx2 -> ctx3 `Thins` ctx2 -> Subst ctx1 ctx3
 restrict (Base thin') thin = Base (thin' . thin)
@@ -61,9 +64,8 @@ sub2 . (sub1 :< t) = sub2 . sub1 :< Sub t sub2
 
 -- Equivalence -----------------------------------------------------------------
 
-data Equiv : Term ctx ty -> Term ctx ty -> Type
-
-data Equiv where
+public export
+data Equiv : Term ctx ty -> Term ctx ty -> Type where
   Refl : Equiv t t
   Sym : Equiv t u -> Equiv u t
   Trans : Equiv t u -> Equiv u v -> Equiv t v
@@ -74,7 +76,7 @@ data Equiv where
   PiBeta : Equiv (App (Abs t) u) (Sub t (Base Id :< u))
   NatBetaZ : Equiv (Rec Zero t u) t
   NatBetaS : Equiv (Rec (Succ t) u v) (Sub v (Base Id :< Rec t u v))
-  SubVar : Equiv (Sub (Var i) sub) (indexSubst sub i)
+  SubVar : Equiv (Sub (Var i) sub) (index sub i)
   SubAbs : Equiv (Sub (Abs t) sub) (Abs (Sub t $ lift sub))
   SubApp : Equiv (Sub (App t u) sub) (App (Sub t sub) (Sub u sub))
   SubZero : Equiv (Sub Zero sub) Zero
