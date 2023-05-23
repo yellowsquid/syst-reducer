@@ -5,8 +5,19 @@ import NormalForm
 import Term
 import Thinning
 
-Res : Type -> Type
-Res = Pair ()
+record Cont (a : Type) where
+  constructor Then
+  runCont : forall res. (a -> res) -> res
+
+Functor Cont where
+  map f (Then g) = Then (\k => k (g f))
+
+Applicative Cont where
+  pure x = Then (\k => k x)
+  Then f <*> Then v = Then (\k => f (\j => v (k . j)))
+
+Monad Cont where
+  join (Then f) = Then (\k => f (\c => runCont c k))
 
 public export
 data NormSubst : SnocList Ty -> SnocList Ty -> Type where
@@ -36,11 +47,11 @@ restrict (sub :< t) (Keep thin) = restrict sub thin :< t
 
 -- Evaluates a term in a context of normal forms.
 partial
-eval : Term ctx ty -> NormSubst ctx' ctx -> Res (Normal ctx' ty)
+eval : Term ctx ty -> NormSubst ctx' ctx -> Cont (Normal ctx' ty)
 partial
-evalSub : Subst ctx ctx'' -> NormSubst ctx' ctx -> Res (NormSubst ctx' ctx'')
+evalSub : Subst ctx ctx'' -> NormSubst ctx' ctx -> Cont (NormSubst ctx' ctx'')
 partial
-rec : Normal ctx N -> Normal ctx ty -> Normal (ctx :< ty) ty -> Res (Normal ctx ty)
+rec : Normal ctx N -> Normal ctx ty -> Normal (ctx :< ty) ty -> Cont (Normal ctx ty)
 
 eval (Var i) sub = pure (index sub i)
 eval (Abs t) sub = [| Abs (eval t $ lift sub) |]
