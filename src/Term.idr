@@ -46,18 +46,20 @@ lift : Subst ctx ctx' -> Subst (ctx :< ty) (ctx' :< ty)
 lift (Base thin) = Base (keep thin)
 lift (sub :< t) = shift (sub :< t) :< Var Here
 
-export
+public export
 index : Subst ctx' ctx -> Elem ty ctx -> Term ctx' ty
 index (Base thin) i = Var (index thin i)
 index (sub :< t) Here = t
 index (sub :< t) (There i) = index sub i
 
+public export
 restrict : Subst ctx1 ctx2 -> ctx3 `Thins` ctx2 -> Subst ctx1 ctx3
 restrict (Base thin') thin = Base (thin' . thin)
 restrict (sub :< t) Id = sub :< t
 restrict (sub :< t) (Drop thin) = restrict sub thin
 restrict (sub :< t) (Keep thin) = restrict sub thin :< t
 
+export
 (.) : Subst ctx1 ctx2 -> Subst ctx2 ctx3 -> Subst ctx1 ctx3
 sub2 . Base thin = restrict sub2 thin
 sub2 . (sub1 :< t) = sub2 . sub1 :< Sub t sub2
