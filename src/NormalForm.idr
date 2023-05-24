@@ -36,6 +36,9 @@ record Normal (ctx : SnocList Ty) (ty : Ty) where
 -- Inversions ------------------------------------------------------------------
 
 export
+Uninhabited (IsNormal (Sub t sub)) where uninhabited (Ntrl prf) impossible
+
+export
 predNorm : IsNormal (Succ t) -> IsNormal t
 predNorm (Succ prf) = prf
 

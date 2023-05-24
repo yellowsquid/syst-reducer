@@ -6,6 +6,7 @@ options = "--total"
 
 modules
   = Level0
+  , Level1
   , NormalForm
   , Term
   , Thinning
