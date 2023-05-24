@@ -45,50 +45,38 @@ restrict (sub :< t) Id = sub :< t
 restrict (sub :< t) (Drop thin) = restrict sub thin
 restrict (sub :< t) (Keep thin) = restrict sub thin :< t
 
-data Case : Type where
-  Eval : (0 ty : Ty) -> (0 ctx, ctx' : SnocList Ty) -> Case
-  EvalSub : (0 ctx, ctx', ctx'' : SnocList Ty) -> Case
-  App : (0 ty, ty' : Ty) -> (0 ctx : SnocList Ty) -> Case
-  Rec : (0 ty : Ty) -> (0 ctx : SnocList Ty) -> Case
-
-0 Input : Case -> Type
-Input (Eval ty ctx ctx') = (Term ctx ty, NormSubst ctx' ctx)
-Input (EvalSub ctx ctx' ctx'') = (Subst ctx' ctx, NormSubst ctx'' ctx')
-Input (App ty ty' ctx) = (Normal ctx (ty ~> ty'), Normal ctx ty)
-Input (Rec ty ctx) = (Normal ctx N, Normal ctx ty, Normal (ctx :< ty) ty)
-
-0 Output : Case -> Type
-Output (Eval ty ctx ctx') = Normal ctx' ty
-Output (EvalSub ctx ctx' ctx'') = NormSubst ctx'' ctx
-Output (App ty ty' ctx) = Normal ctx ty'
-Output (Rec ty ctx) = Normal ctx ty
+data Case : Type -> Type where
+  Eval : Term ctx ty -> NormSubst ctx' ctx -> Case (Normal ctx' ty)
+  EvalSub : Subst ctx' ctx -> NormSubst ctx'' ctx' -> Case (NormSubst ctx'' ctx)
+  App : Normal ctx (ty ~> ty') -> Normal ctx ty -> Case (Normal ctx ty')
+  Rec : Normal ctx N -> Normal ctx ty -> Normal (ctx :< ty) ty -> Case (Normal ctx ty)
 
 partial
-eval : (c : Case) -> Input c -> Cont (Output c)
-eval (Eval _ _ _) (Var i, sub) = pure (index sub i)
-eval (Eval _ _ _) (Abs t, sub) = [| Abs (eval (Eval _ _ _) (t, lift sub)) |]
-eval (Eval _ _ _) (App t u, sub) = do
-  t <- eval (Eval _ _ _) (t, sub)
-  u <- eval (Eval _ _ _) (u, sub)
-  eval (App _ _ _) (t, u)
-eval (Eval _ _ _) (Zero, sub) = pure Zero
-eval (Eval _ _ _) (Succ t, sub) = [| Succ (eval (Eval _ _ _) (t, sub)) |]
-eval (Eval _ _ _) (Rec t u v, sub) = do
-  t <- eval (Eval _ _ _) (t, sub)
-  u <- eval (Eval _ _ _) (u, sub)
-  v <- eval (Eval _ _ _) (v, lift sub)
-  eval (Rec _ _) (t, u, v)
-eval (Eval _ _ _) (Sub t sub', sub) = do
-  sub' <- eval (EvalSub _ _ _) (sub', sub)
-  eval (Eval _ _ _) (t, sub')
-eval (EvalSub _ _ _) (Base thin, sub') = pure (restrict sub' thin)
-eval (EvalSub _ _ _) (sub :< t, sub') =
-  [| eval (EvalSub _ _ _) (sub, sub') :< eval (Eval _ _ _) (t, sub') |]
-eval (App _ _ _) (Abs t, u) =
-  eval (Eval _ _ _) (forgetNorm t, Base Id :< u)
-eval (App _ _ _) (Ntrl t, u) = pure (Ntrl $ App t u)
-eval (Rec _ _) (Zero, u, v) = pure u
-eval (Rec _ _) (Succ t, u, v) = do
-  val <- eval (Rec _ _) (t, u, v)
-  eval (Eval _ _ _) (forgetNorm v, Base Id :< val)
-eval (Rec _ _) (Ntrl t, u, v) = pure (Ntrl $ Rec t u v)
+eval : Case ret -> Cont (ret)
+eval (Eval (Var i) sub) = pure (index sub i)
+eval (Eval (Abs t) sub) = [| Abs (eval (Eval t (lift sub))) |]
+eval (Eval (App t u) sub) = do
+  t <- eval (Eval t sub)
+  u <- eval (Eval u sub)
+  eval (App t u)
+eval (Eval (Zero) sub) = pure Zero
+eval (Eval (Succ t) sub) = [| Succ (eval (Eval t sub)) |]
+eval (Eval (Rec t u v) sub) = do
+  t <- eval (Eval t sub)
+  u <- eval (Eval u sub)
+  v <- eval (Eval v (lift sub))
+  eval (Rec t u v)
+eval (Eval (Sub t sub') sub) = do
+  sub' <- eval (EvalSub sub' sub)
+  eval (Eval t sub')
+eval (EvalSub (Base thin) sub') = pure (restrict sub' thin)
+eval (EvalSub (sub :< t) sub') =
+  [| eval (EvalSub sub sub') :< eval (Eval t sub') |]
+eval (App (Abs t) u) =
+  eval (Eval (forgetNorm t) (Base Id :< u))
+eval (App (Ntrl t) u) = pure (Ntrl $ App t u)
+eval (Rec (Zero) u v) = pure u
+eval (Rec (Succ t) u v) = do
+  val <- eval (Rec t u v)
+  eval (Eval (forgetNorm v) (Base Id :< val))
+eval (Rec (Ntrl t) u v) = pure (Ntrl $ Rec t u v)
