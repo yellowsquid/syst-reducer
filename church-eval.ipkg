@@ -10,3 +10,6 @@ modules
   , NormalForm
   , Term
   , Thinning
+  , Total.NormalForm
+  , Total.Reduction
+  , Total.Term
