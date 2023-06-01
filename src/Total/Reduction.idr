@@ -1,5 +1,6 @@
 module Total.Reduction
 
+import Syntax.PreorderReasoning
 import Total.Term
 
 public export
@@ -63,3 +64,34 @@ export
 RecCong3' : v1 >= v2 -> Rec t u v1 >= Rec t u v2
 RecCong3' [<] = [<]
 RecCong3' (steps :< step) = RecCong3' steps :< RecCong3 step
+
+-- Properties ------------------------------------------------------------------
+
+lemma :
+  (t : Term (ctx :< ty) ty') ->
+  (thin : ctx `Thins` ctx') ->
+  (u : Term ctx ty) ->
+  subst (wkn t (keep thin)) (Base Id :< wkn u thin) = wkn (subst t (Base Id :< u)) thin
+lemma t thin u = Calc $
+  |~ subst (wkn t (keep thin)) (Base Id :< wkn u thin)
+  ~~ subst t (restrict (Base Id :< wkn u thin) (keep thin))
+    ...(substWkn t (keep thin) (Base Id :< wkn u thin))
+  ~~ subst t (Base thin :< wkn u thin)
+    ...(cong (subst t) $ restrictKeep (Base Id) (wkn u thin) thin)
+  ~~ subst t (Base (thin . Id) :< wkn u thin)
+    ...(sym $ cong (subst t . (:< wkn u thin) . Base) $ identityRight thin)
+  ~~ wkn (subst t (Base Id :< u)) thin
+    ...(sym $ wknSubst t (Base Id :< u) thin)
+
+export
+wknStep : t > u -> wkn t thin > wkn u thin
+wknStep (AbsCong step) = AbsCong (wknStep step)
+wknStep (AppCong1 step) = AppCong1 (wknStep step)
+wknStep (AppCong2 step) = AppCong2 (wknStep step)
+wknStep (AppBeta {t, u}) {thin} = rewrite sym $ lemma t thin u in AppBeta
+wknStep (SucCong step) = SucCong (wknStep step)
+wknStep (RecCong1 step) = RecCong1 (wknStep step)
+wknStep (RecCong2 step) = RecCong2 (wknStep step)
+wknStep (RecCong3 step) = RecCong3 (wknStep step)
+wknStep RecZero = RecZero
+wknStep RecSuc = RecSuc

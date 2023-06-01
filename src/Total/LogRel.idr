@@ -1,0 +1,211 @@
+module Total.LogRel
+
+import Syntax.PreorderReasoning
+import Total.Reduction
+import Total.Term
+
+%prefix_record_projections off
+
+LogRel :
+  {ctx : SnocList Ty} ->
+  (P : {ctx, ty : _} -> Term ctx ty -> Type) ->
+  {ty : Ty} ->
+  (t : Term ctx ty) ->
+  Type
+LogRel p {ty = N} t = p t
+LogRel p {ty = ty ~> ty'} t =
+  (p t,
+   {ctx' : SnocList Ty} ->
+   (thin : ctx `Thins` ctx') ->
+   (u : Term ctx' ty) ->
+   LogRel p u ->
+   LogRel p (App (wkn t thin) u))
+
+escape :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  {ty : Ty} ->
+  {0 t : Term ctx ty} ->
+  LogRel P t ->
+  P t
+escape {ty = N} pt = pt
+escape {ty = ty ~> ty'} (pt, app) = pt
+
+record PreserveHelper
+  (P : {ctx, ty : _} -> Term ctx ty -> Type)
+  (R : {ctx, ty : _} -> Term ctx ty -> Term ctx ty -> Type) where
+  constructor MkPresHelper
+  app :
+    {0 ctx : SnocList Ty} ->
+    {ty, ty' : Ty} ->
+    {0 t, u : Term ctx (ty ~> ty')} ->
+    {ctx' : SnocList Ty} ->
+    (thin : ctx `Thins` ctx') ->
+    (v : Term ctx' ty) ->
+    R t u ->
+    R (App (wkn t thin) v) (App (wkn u thin) v)
+  pres :
+    {0 ctx : SnocList Ty} ->
+    {ty : Ty} ->
+    {0 t, u : Term ctx ty} ->
+    P t ->
+    R t u ->
+    P u
+
+%name PreserveHelper help
+
+preserve :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  {R : {ctx, ty : _} -> Term ctx ty -> Term ctx ty -> Type} ->
+  {ty : Ty} ->
+  {0 t, u : Term ctx ty} ->
+  PreserveHelper P R ->
+  LogRel P t ->
+  R t u ->
+  LogRel P u
+preserve help {ty = N} pt prf = help.pres pt prf
+preserve help {ty = ty ~> ty'} (pt, app) prf =
+  (help.pres pt prf, \thin, v, rel => preserve help (app thin v rel) (help.app thin v prf))
+
+data AllLogRel : (P : {ctx, ty : _} -> Term ctx ty -> Type) -> Terms ctx' ctx -> Type where
+  Base :
+    {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+    {0 thin : ctx `Thins` ctx'} ->
+    AllLogRel P (Base thin)
+  (:<) :
+    {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+    AllLogRel P sub ->
+    LogRel P t ->
+    AllLogRel P (sub :< t)
+
+%name AllLogRel allRels
+
+index :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  (forall ty. (i : Elem ty ctx') -> LogRel P (Var i)) ->
+  {sub : Terms ctx' ctx} ->
+  AllLogRel P sub ->
+  (i : Elem ty ctx) ->
+  LogRel P (index sub i)
+index f Base i = f (index _ i)
+index f (allRels :< rel) Here = rel
+index f (allRels :< rel) (There i) = index f allRels i
+
+Valid :
+  (P : {ctx, ty : _} -> Term ctx ty -> Type) ->
+  {ctx : SnocList Ty} ->
+  {ty : Ty} ->
+  (t : Term ctx ty) ->
+  Type
+Valid p t =
+  {ctx' : SnocList Ty} ->
+  (sub : Terms ctx' ctx) ->
+  (allRel : AllLogRel p sub) ->
+  LogRel p (subst t sub)
+
+record ValidHelper (P : {ctx, ty : _} -> Term ctx ty -> Type) where
+  constructor MkValidHelper
+  var : forall ctx, ty. (i : Elem ty ctx) -> LogRel P (Var i)
+  abs : forall ctx, ty, ty'. {0 t : Term (ctx :< ty) ty'} -> LogRel P t -> P (Abs t)
+  zero : forall ctx. P {ctx} Zero
+  suc : forall ctx. {0 t : Term ctx N} -> P t -> P (Suc t)
+  rec : forall ctx, ty.
+    {0 t : Term ctx N} ->
+    {0 u : Term ctx ty} ->
+    {0 v : Term ctx (ty ~> ty)} ->
+    LogRel P t ->
+    LogRel P u ->
+    LogRel P v ->
+    LogRel P (Rec t u v)
+  step : forall ctx, ty. {0 t, u : Term ctx ty} -> P t -> u > t -> P u
+  wkn : forall ctx, ctx', ty.
+    {0 t : Term ctx ty} ->
+    P t ->
+    (thin : ctx `Thins` ctx') ->
+    P (wkn t thin)
+
+%name ValidHelper help
+
+wknRel :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  ValidHelper P ->
+  {ty : Ty} ->
+  {0 t : Term ctx ty} ->
+  LogRel P t ->
+  (thin : ctx `Thins` ctx') ->
+  LogRel P (wkn t thin)
+wknRel help {ty = N} pt thin = help.wkn pt thin
+wknRel help {ty = ty ~> ty'} (pt, app) thin =
+  ( help.wkn pt thin
+  , \thin', u, rel => rewrite wknHomo t thin thin' in app (thin' . thin) u rel
+  )
+
+wknAllRel :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  ValidHelper P ->
+  {ctx : SnocList Ty} ->
+  {sub : Terms ctx' ctx} ->
+  AllLogRel P sub ->
+  (thin : ctx' `Thins` ctx'') ->
+  AllLogRel P (wknAll sub thin)
+wknAllRel help Base thin = Base
+wknAllRel help (allRels :< rel) thin = wknAllRel help allRels thin :< wknRel help rel thin
+
+allValid :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  {ctx : SnocList Ty} ->
+  {ty : Ty} ->
+  ValidHelper P ->
+  (t : Term ctx ty) ->
+  Valid P t
+allValid help (Var i) sub allRels = index help.var allRels i
+allValid help (Abs t) sub allRels =
+  let valid = allValid help t in
+  ( let
+      rec =
+        valid
+          (wknAll sub (Drop Id) :< Var Here)
+          (wknAllRel help allRels (Drop Id) :< help.var Here)
+    in
+      help.abs rec
+  , \thin, u, rel =>
+    let
+      helper : PreserveHelper P (flip (>))
+      helper = MkPresHelper (\thin, v, step => AppCong1 (wknStep step)) help.step
+      eq :
+        (subst (wkn (subst t (wknAll sub (Drop Id) :< Var Here)) (keep thin)) (Base Id :< u) =
+         subst t (wknAll sub thin :< u))
+      eq = Calc $
+        |~ subst (wkn (subst t (wknAll sub (Drop Id) :< Var Here)) (keep thin)) (Base Id :< u)
+        ~~ subst (subst t (wknAll sub (Drop Id) :< Var Here)) (restrict (Base Id :< u) (keep thin))
+          ...(substWkn (subst t (wknAll sub (Drop Id) :< Var Here)) (keep thin) (Base Id :< u))
+        ~~ subst (subst t (wknAll sub (Drop Id) :< Var Here)) (Base thin :< u)
+          ...(cong (subst (subst t (wknAll sub (Drop Id) :< Var Here))) $ restrictKeep (Base Id) u thin)
+        ~~ subst t ((Base thin :< u) . wknAll sub (Drop Id) :< u)
+          ...(substHomo t (wknAll sub (Drop Id) :< Var Here) (Base thin :< u))
+        ~~ subst t (Base (thin . Id) . sub :< u)
+          ...(cong (subst t . (:< u)) $ compWknAll sub (Base thin :< u) (Drop Id))
+        ~~ subst t (Base thin . sub :< u)
+          ...(cong (subst t . (:< u) . (. sub) . Base) $ identityRight thin)
+        ~~ subst t (wknAll sub thin :< u)
+          ...(cong (subst t . (:< u)) $ baseComp thin sub)
+    in
+      preserve
+        helper
+        (valid (wknAll sub thin :< u) (wknAllRel help allRels thin :< rel))
+        (replace {p = (App (wkn (subst (Abs t) sub) thin) u >)}
+          eq
+          AppBeta)
+  )
+allValid help (App t u) sub allRels =
+  let (pt, app) = allValid help t sub allRels in
+  let rel = allValid help u sub allRels in
+  rewrite sym $ wknId (subst t sub) in app Id (subst u sub) rel
+allValid help Zero sub allRels = help.zero
+allValid help (Suc t) sub allRels =
+  let pt = allValid help t sub allRels in
+  help.suc pt
+allValid help (Rec t u v) sub allRels =
+  let relt = allValid help t sub allRels in
+  let relu = allValid help u sub allRels in
+  let relv = allValid help v sub allRels in
+  help.rec relt relu relv

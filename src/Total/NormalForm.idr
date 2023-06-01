@@ -3,6 +3,8 @@ module Total.NormalForm
 import Total.Reduction
 import Total.Term
 
+%prefix_record_projections off
+
 public export
 data Neutral : Term ctx ty -> Type
 public export
@@ -22,6 +24,7 @@ data Normal where
 %name Neutral n, m, k
 %name Normal n, m, k
 
+public export
 record NormalForm (0 t : Term ctx ty) where
   constructor MkNf
   term : Term ctx ty

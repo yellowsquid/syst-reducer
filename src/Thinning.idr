@@ -142,3 +142,12 @@ keepHomo (Drop thin2) (Keep thin1) = Refl
 keepHomo (Keep thin2) Id = Refl
 keepHomo (Keep thin2) (Drop thin) = Refl
 keepHomo (Keep thin2) (Keep thin) = Refl
+
+export
+keepDrop :
+  (thin2 : sy `Thins` sz) ->
+  (thin1 : sx `Thins` sy) ->
+  keep thin2 . Drop thin1 = Drop (thin2 . thin1)
+keepDrop Id thin1 = Refl
+keepDrop (Drop thin2) thin1 = Refl
+keepDrop (Keep thin2) thin1 = Refl
