@@ -21,6 +21,11 @@ data Len : SnocList Ty -> Type where
 %name Len k, m, n
 
 public export
+Cast (Len ctx) Nat where
+  cast Z = 0
+  cast (S k) = S (cast k)
+
+public export
 0 Fun : Len tys -> (Ty -> Type) -> Type -> Type
 Fun Z arg ret = ret
 Fun (S {ty} k) arg ret = Fun k arg (arg ty -> ret)

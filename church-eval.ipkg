@@ -4,11 +4,14 @@ sourcedir = "src"
 
 options = "--total"
 
+depends = contrib
+
 modules
   = Thinning
   , Total.Encoded.Util
   , Total.LogRel
   , Total.NormalForm
+  , Total.Pretty
   , Total.Reduction
   , Total.Syntax
   , Total.Term
