@@ -6,6 +6,7 @@ import Total.Term
 
 %prefix_record_projections off
 
+public export
 LogRel :
   {ctx : SnocList Ty} ->
   (P : {ctx, ty : _} -> Term ctx ty -> Type) ->
@@ -21,6 +22,7 @@ LogRel p {ty = ty ~> ty'} t =
    LogRel p u ->
    LogRel p (App (wkn t thin) u))
 
+export
 escape :
   {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
   {ty : Ty} ->
@@ -30,6 +32,7 @@ escape :
 escape {ty = N} pt = pt
 escape {ty = ty ~> ty'} (pt, app) = pt
 
+public export
 record PreserveHelper
   (P : {ctx, ty : _} -> Term ctx ty -> Type)
   (R : {ctx, ty : _} -> Term ctx ty -> Term ctx ty -> Type) where
@@ -48,11 +51,22 @@ record PreserveHelper
     {ty : Ty} ->
     {0 t, u : Term ctx ty} ->
     P t ->
-    R t u ->
+    (0 _ : R t u) ->
     P u
 
 %name PreserveHelper help
 
+export
+backStepHelper :
+  {0 P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  (forall ctx, ty. {0 t, u : Term ctx ty} -> P t -> (0 _ : u > t) -> P u) ->
+  PreserveHelper P (flip (>))
+backStepHelper pres =
+  MkPresHelper
+    (\thin, v, step => AppCong1 (wknStep step))
+    pres
+
+export
 preserve :
   {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
   {R : {ctx, ty : _} -> Term ctx ty -> Term ctx ty -> Type} ->
@@ -60,7 +74,7 @@ preserve :
   {0 t, u : Term ctx ty} ->
   PreserveHelper P R ->
   LogRel P t ->
-  R t u ->
+  (0 _ : R t u) ->
   LogRel P u
 preserve help {ty = N} pt prf = help.pres pt prf
 preserve help {ty = ty ~> ty'} (pt, app) prf =
@@ -81,7 +95,7 @@ data AllLogRel : (P : {ctx, ty : _} -> Term ctx ty -> Type) -> Terms ctx' ctx ->
 
 index :
   {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
-  (forall ty. (i : Elem ty ctx') -> LogRel P (Var i)) ->
+  ((i : Elem ty ctx') -> LogRel P (Var i)) ->
   {sub : Terms ctx' ctx} ->
   AllLogRel P sub ->
   (i : Elem ty ctx) ->
@@ -102,21 +116,24 @@ Valid p t =
   (allRel : AllLogRel p sub) ->
   LogRel p (subst t sub)
 
+public export
 record ValidHelper (P : {ctx, ty : _} -> Term ctx ty -> Type) where
   constructor MkValidHelper
-  var : forall ctx, ty. (i : Elem ty ctx) -> LogRel P (Var i)
-  abs : forall ctx, ty, ty'. {0 t : Term (ctx :< ty) ty'} -> LogRel P t -> P (Abs t)
+  var : forall ctx. {ty : Ty} -> (i : Elem ty ctx) -> LogRel P (Var i)
+  abs : forall ctx, ty. {ty' : Ty} -> {0 t : Term (ctx :< ty) ty'} -> LogRel P t -> P (Abs t)
   zero : forall ctx. P {ctx} Zero
   suc : forall ctx. {0 t : Term ctx N} -> P t -> P (Suc t)
-  rec : forall ctx, ty.
+  rec :
+    {ctx : SnocList Ty} ->
+    {ty : Ty} ->
     {0 t : Term ctx N} ->
-    {0 u : Term ctx ty} ->
-    {0 v : Term ctx (ty ~> ty)} ->
+    {u : Term ctx ty} ->
+    {v : Term ctx (ty ~> ty)} ->
     LogRel P t ->
     LogRel P u ->
     LogRel P v ->
     LogRel P (Rec t u v)
-  step : forall ctx, ty. {0 t, u : Term ctx ty} -> P t -> u > t -> P u
+  step : forall ctx, ty. {0 t, u : Term ctx ty} -> P t -> (0 _ : u > t) -> P u
   wkn : forall ctx, ctx', ty.
     {0 t : Term ctx ty} ->
     P t ->
@@ -150,6 +167,7 @@ wknAllRel :
 wknAllRel help Base thin = Base
 wknAllRel help (allRels :< rel) thin = wknAllRel help allRels thin :< wknRel help rel thin
 
+export
 allValid :
   {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
   {ctx : SnocList Ty} ->
@@ -169,8 +187,6 @@ allValid help (Abs t) sub allRels =
       help.abs rec
   , \thin, u, rel =>
     let
-      helper : PreserveHelper P (flip (>))
-      helper = MkPresHelper (\thin, v, step => AppCong1 (wknStep step)) help.step
       eq :
         (subst (wkn (subst t (wknAll sub (Drop Id) :< Var Here)) (keep thin)) (Base Id :< u) =
          subst t (wknAll sub thin :< u))
@@ -190,7 +206,7 @@ allValid help (Abs t) sub allRels =
           ...(cong (subst t . (:< u)) $ baseComp thin sub)
     in
       preserve
-        helper
+        (backStepHelper help.step)
         (valid (wknAll sub thin :< u) (wknAllRel help allRels thin :< rel))
         (replace {p = (App (wkn (subst (Abs t) sub) thin) u >)}
           eq
@@ -209,3 +225,13 @@ allValid help (Rec t u v) sub allRels =
   let relu = allValid help u sub allRels in
   let relv = allValid help v sub allRels in
   help.rec relt relu relv
+
+export
+allRel :
+  {P : {ctx, ty : _} -> Term ctx ty -> Type} ->
+  {ctx : SnocList Ty} ->
+  {ty : Ty} ->
+  ValidHelper P ->
+  (t : Term ctx ty) ->
+  P t
+allRel help t = rewrite sym $ substId t in escape (allValid help t (Base Id) Base)

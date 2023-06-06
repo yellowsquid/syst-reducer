@@ -95,3 +95,8 @@ wknStep (RecCong2 step) = RecCong2 (wknStep step)
 wknStep (RecCong3 step) = RecCong3 (wknStep step)
 wknStep RecZero = RecZero
 wknStep RecSuc = RecSuc
+
+export
+wknSteps : t >= u -> wkn t thin >= wkn u thin
+wknSteps [<] = [<]
+wknSteps (steps :< step) = wknSteps steps :< wknStep step

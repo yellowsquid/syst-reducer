@@ -322,6 +322,15 @@ baseComp thin (sub :< t) = cong2 (:<) (baseComp thin sub) (substBase t thin)
 -- Substitution
 
 export
+substId : (t : Term ctx ty) -> subst t (Base Id) = t
+substId (Var i) = Refl
+substId (Abs t) = cong Abs $ trans (sym $ substCong t Base) (substId t)
+substId (App t u) = cong2 App (substId t) (substId u)
+substId Zero = Refl
+substId (Suc t) = cong Suc (substId t)
+substId (Rec t u v) = cong3 Rec (substId t) (substId u) (substId v)
+
+export
 substHomo :
   (t : Term ctx ty) ->
   (sub1 : Terms ctx' ctx) ->

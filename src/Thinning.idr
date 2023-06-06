@@ -31,6 +31,11 @@ keep Id = Id
 keep (Drop thin) = Keep (Drop thin)
 keep (Keep thin) = Keep (Keep thin)
 
+public export
+empty : (sx : SnocList a) -> [<] `Thins` sx
+empty [<] = Id
+empty (sx :< x) = Drop (empty sx)
+
 -- Operations ------------------------------------------------------------------
 
 public export

@@ -5,12 +5,10 @@ sourcedir = "src"
 options = "--total"
 
 modules
-  = Level0
-  , Level1
-  , NormalForm
-  , Term
-  , Thinning
+  = Thinning
+  , Total.Encoded.Util
   , Total.LogRel
   , Total.NormalForm
   , Total.Reduction
+  , Total.Syntax
   , Total.Term
