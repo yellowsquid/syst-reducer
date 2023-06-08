@@ -22,8 +22,8 @@ namespace Bool
   False = Suc Zero
 
   export
-  If : Term ctx B -> Term ctx ty -> Term ctx ty -> Term ctx ty
-  If t u v = Rec t u (Abs $ wkn v (Drop Id))
+  If : Len ctx => Term ctx B -> Term ctx ty -> Term ctx ty -> Term ctx ty
+  If t u v = Rec t u (Abs $ wkn v (Drop id))
 
 namespace Arb
   export
@@ -112,7 +112,7 @@ namespace Pair
   export
   mapProd :
     {ctx, tys, tys' : SnocList Ty} ->
-    {auto 0 prf : length tys = length tys'} ->
+    {auto 0 prf : SnocList.length tys = SnocList.length tys'} ->
     All (Term ctx) (zipWith (~>) tys tys') ->
     Term ctx (Product tys ~> Product tys')
   mapProd {tys = [<], tys' = [<]} [<] = Abs (Var Here)
@@ -120,8 +120,8 @@ namespace Pair
     Abs' (S Z)
       (\p =>
         App' (lift pair)
-          [<App (wkn (mapProd fs {prf = injective prf}) (Drop Id) . lift fst) p
-          , App (wkn f (Drop Id) . lift snd) p
+          [<App (wkn (mapProd fs {prf = injective prf}) (Drop id) . lift fst) p
+          , App (wkn f (Drop id) . lift snd) p
           ])
 
   replicate : Nat -> a -> SnocList a
@@ -292,9 +292,9 @@ namespace Nat
   Cond ((n, v) :: xs) =
     Abs' (S Z)
       (\t =>
-        If (App' (lift LE) [<t, wkn n (Drop Id)])
-          (App (wkn v (Drop Id)) t)
-          (App (wkn (Cond xs) (Drop Id)) (App' (lift Sub) [<t, wkn n (Drop Id)])))
+        If (App' (lift LE) [<t, wkn n (Drop id)])
+          (App (wkn v (Drop id)) t)
+          (App (wkn (Cond xs) (Drop id)) (App' (lift Sub) [<t, wkn n (Drop id)])))
 
 namespace Data
   public export
@@ -394,7 +394,7 @@ namespace Data
                   (lift $ put {tys = map (flip fillShape N) c} $
                     rewrite forgetMap (flip fillShape N) c in
                     elemMap (flip fillShape N) i)
-                  (App' (lift mapSnd) [<Abs (lift $ enumerate n), wkn t (Drop Id)])))
+                  (App' (lift mapSnd) [<Abs (lift $ enumerate n), wkn t (Drop id)])))
           :: calcData (App (lift snd) t) (Suc Zero)
           )
         ])
@@ -409,8 +409,8 @@ namespace Data
   elim cases = Abs' (S Z)
     (\t =>
       let tags = Suc (App (lift $ project $ There $ There Here) t) in
-      let offset = App (lift $ project $ There Here) (wkn t (Drop $ Drop Id)) in
-      let vals = App (lift $ project $ Here) (wkn t (Drop $ Drop Id)) in
+      let offset = App (lift $ project $ There Here) (wkn t (Drop $ Drop id)) in
+      let vals = App (lift $ project $ Here) (wkn t (Drop $ Drop id)) in
       App'
         (Rec tags
           (lift arb)
@@ -420,7 +420,7 @@ namespace Data
                 (rewrite forgetMap (flip fillShape N) c in
                  gmap
                    (\f =>
-                     wkn f (Drop $ Drop $ Drop Id) .
+                     wkn f (Drop $ Drop $ Drop id) .
                      App (lift mapShape) (rec . App (lift Add) (App offset n)))
                    cases) .
                vals)

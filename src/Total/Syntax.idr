@@ -14,29 +14,17 @@ public export
 tys ~>* ty = foldr (~>) ty tys
 
 public export
-data Len : SnocList Ty -> Type where
-  Z : Len [<]
-  S : Len tys -> Len (tys :< ty)
-
-%name Len k, m, n
-
-public export
-Cast (Len ctx) Nat where
-  cast Z = 0
-  cast (S k) = S (cast k)
-
-public export
-0 Fun : Len tys -> (Ty -> Type) -> Type -> Type
+0 Fun : {sx : SnocList a} -> Len sx -> (a -> Type) -> Type -> Type
 Fun Z arg ret = ret
-Fun (S {ty} k) arg ret = Fun k arg (arg ty -> ret)
+Fun (S {x = ty} k) arg ret = Fun k arg (arg ty -> ret)
 
-after : (k : Len tys) -> (a -> b) -> Fun k p a -> Fun k p b
+after : (k : Len sx) -> (a -> b) -> Fun k p a -> Fun k p b
 after Z f x = f x
 after (S k) f x = after k (f .) x
 
 before :
-  (k : Len tys) ->
-  (forall ty. p ty -> q ty) ->
+  (k : Len sx) ->
+  (forall x. p x -> q x) ->
   Fun k q ret ->
   Fun k p ret
 before Z f x = x
@@ -70,19 +58,20 @@ App' t [<] = t
 App' t (us :< u) = App (App' t us) u
 
 export
-(.) : {ty, ty' : Ty} -> Term ctx (ty' ~> ty'') -> Term ctx (ty ~> ty') -> Term ctx (ty ~> ty'')
-t . u = Abs' (S Z) (\x => App (wkn t (Drop Id)) (App (wkn u (Drop Id)) x))
+(.) : Len ctx => {ty, ty' : Ty} -> Term ctx (ty' ~> ty'') -> Term ctx (ty ~> ty') -> Term ctx (ty ~> ty'')
+t . u = Abs' (S Z) (\x => App (wkn t (Drop id)) (App (wkn u (Drop id)) x))
 
 export
 (.*) :
+  Len ctx =>
   {ty : Ty} ->
   {tys : SnocList Ty} ->
   Term ctx (ty ~> ty') ->
   Term ctx (tys ~>* ty) ->
   Term ctx (tys ~>* ty')
 (.*) {tys = [<]} t u = App t u
-(.*) {tys = tys :< ty''} t u = Abs' (S Z) (\f => wkn t (Drop Id) . f) .*  u
+(.*) {tys = tys :< ty''} t u = Abs' (S Z) (\f => wkn t (Drop id) . f) .*  u
 
 export
 lift : {ctx : SnocList Ty} -> Term [<] ty -> Term ctx ty
-lift t = wkn t (empty ctx)
+lift t = wkn t empty

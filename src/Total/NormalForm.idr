@@ -93,8 +93,8 @@ recNf' :
 recNf' Zero n relU relV = backStepsRel relU [<RecZero]
 recNf' (Suc t') n relU relV =
   let rec = recNf' t' (invSuc n) relU relV in
-  let step : Rec (Suc t') u v > App (wkn v Id) (Rec t' u v) = rewrite wknId v in RecSuc in
-  backStepsRel (snd relV Id _ rec) [<step]
+  let step : Rec (Suc t') u v > App (wkn v id) (Rec t' u v) = rewrite wknId v in RecSuc in
+  backStepsRel (snd relV id _ rec) [<step]
 recNf' t'@(Var _) n relU relV =
   let nfU = escape relU in
   let nfV = escape {ty = ty ~> ty} relV in

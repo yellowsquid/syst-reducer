@@ -8,7 +8,9 @@ data (>) : Term ctx ty -> Term ctx ty -> Type where
   AbsCong : t > u -> Abs t > Abs u
   AppCong1 : t > u -> App t v > App u v
   AppCong2 : u > v -> App t u > App t v
-  AppBeta : App (Abs t) u > subst t (Base Id :< u)
+  AppBeta :
+    (0 len : Len ctx) ->
+    App (Abs t) u > subst t (Base (id @{len}) :< u)
   SucCong : t > u -> Suc t > Suc u
   RecCong1 : t1 > t2 -> Rec t1 u v > Rec t2 u v
   RecCong2 : u1 > u2 -> Rec t u1 v > Rec t u2 v
@@ -68,27 +70,28 @@ RecCong3' (steps :< step) = RecCong3' steps :< RecCong3 step
 -- Properties ------------------------------------------------------------------
 
 lemma :
+  (0 len : Len ctx) ->
   (t : Term (ctx :< ty) ty') ->
   (thin : ctx `Thins` ctx') ->
   (u : Term ctx ty) ->
-  subst (wkn t (keep thin)) (Base Id :< wkn u thin) = wkn (subst t (Base Id :< u)) thin
-lemma t thin u = Calc $
-  |~ subst (wkn t (keep thin)) (Base Id :< wkn u thin)
-  ~~ subst t (restrict (Base Id :< wkn u thin) (keep thin))
-    ...(substWkn t (keep thin) (Base Id :< wkn u thin))
-  ~~ subst t (Base thin :< wkn u thin)
-    ...(cong (subst t) $ restrictKeep (Base Id) (wkn u thin) thin)
-  ~~ subst t (Base (thin . Id) :< wkn u thin)
-    ...(sym $ cong (subst t . (:< wkn u thin) . Base) $ identityRight thin)
-  ~~ wkn (subst t (Base Id :< u)) thin
-    ...(sym $ wknSubst t (Base Id :< u) thin)
+  subst (wkn t (Keep thin)) (Base Thinning.id :< wkn u thin) = wkn (subst t (Base (id @{len}) :< u)) thin
+lemma len t thin u = Calc $
+  |~ subst (wkn t (Keep thin)) (Base id :< wkn u thin)
+  ~~ subst t (restrict (Base id :< wkn u thin) (Keep thin))
+    ...(substWkn t (Keep thin) (Base id :< wkn u thin))
+  ~~ subst t (Base (id . thin) :< wkn u thin)
+    ...(Refl)
+  ~~ subst t (Base (thin . id) :< wkn u thin)
+    ...(cong (subst t . (:< wkn u thin) . Base) $ trans (identityLeft thin) (sym $ identityRight thin))
+  ~~ wkn (subst t (Base id :< u)) thin
+    ...(sym $ wknSubst t (Base id :< u) thin)
 
 export
 wknStep : t > u -> wkn t thin > wkn u thin
 wknStep (AbsCong step) = AbsCong (wknStep step)
 wknStep (AppCong1 step) = AppCong1 (wknStep step)
 wknStep (AppCong2 step) = AppCong2 (wknStep step)
-wknStep (AppBeta {t, u}) {thin} = rewrite sym $ lemma t thin u in AppBeta
+wknStep (AppBeta len {t, u}) {thin} = rewrite sym $ lemma len t thin u in AppBeta _
 wknStep (SucCong step) = SucCong (wknStep step)
 wknStep (RecCong1 step) = RecCong1 (wknStep step)
 wknStep (RecCong2 step) = RecCong2 (wknStep step)

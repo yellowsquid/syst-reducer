@@ -29,7 +29,7 @@ data Term : SnocList Ty -> Ty -> Type where
 public export
 wkn : Term ctx ty -> ctx `Thins` ctx' -> Term ctx' ty
 wkn (Var i) thin = Var (index thin i)
-wkn (Abs t) thin = Abs (wkn t $ keep thin)
+wkn (Abs t) thin = Abs (wkn t $ Keep thin)
 wkn (App t u) thin = App (wkn t thin) (wkn u thin)
 wkn Zero thin = Zero
 wkn (Suc t) thin = Suc (wkn t thin)
@@ -41,6 +41,12 @@ data Terms : SnocList Ty -> SnocList Ty -> Type where
   (:<) : Terms ctx' ctx -> Term ctx' ty -> Terms ctx' (ctx :< ty)
 
 %name Terms sub
+
+%hint
+export
+termsLen : Terms ctx' ctx -> Len ctx'
+termsLen (Base thin) = lenTgt thin
+termsLen (sub :< t) = termsLen sub
 
 public export
 index : Terms ctx' ctx -> Elem ty ctx -> Term ctx' ty
@@ -56,7 +62,7 @@ wknAll (sub :< t) thin = wknAll sub thin :< wkn t thin
 public export
 subst : Term ctx ty -> Terms ctx' ctx -> Term ctx' ty
 subst (Var i) sub = index sub i
-subst (Abs t) sub = Abs (subst t $ wknAll sub (Drop Id) :< Var Here)
+subst (Abs t) sub = Abs (subst t $ wknAll sub (Drop id) :< Var Here)
 subst (App t u) sub = App (subst t sub) (subst u sub)
 subst Zero sub = Zero
 subst (Suc t) sub = Suc (subst t sub)
@@ -65,7 +71,6 @@ subst (Rec t u v) sub = Rec (subst t sub) (subst u sub) (subst v sub)
 public export
 restrict : Terms ctx'' ctx' -> ctx `Thins` ctx' -> Terms ctx'' ctx
 restrict (Base thin') thin = Base (thin' . thin)
-restrict (sub :< t) Id = sub :< t
 restrict (sub :< t) (Drop thin) = restrict sub thin
 restrict (sub :< t) (Keep thin) = restrict sub thin :< t
 
@@ -92,7 +97,7 @@ wknHomo :
 wknHomo (Var i) thin1 thin2 =
   cong Var (indexHomo thin2 thin1 i)
 wknHomo (Abs t) thin1 thin2 =
-  cong Abs $ trans (wknHomo t (keep thin1) (keep thin2)) (cong (wkn t) $ keepHomo thin2 thin1)
+  cong Abs (wknHomo t (Keep thin1) (Keep thin2))
 wknHomo (App t u) thin1 thin2 =
   cong2 App (wknHomo t thin1 thin2) (wknHomo u thin1 thin2)
 wknHomo Zero thin1 thin2 =
@@ -103,8 +108,8 @@ wknHomo (Rec t u v) thin1 thin2 =
   cong3 Rec (wknHomo t thin1 thin2) (wknHomo u thin1 thin2) (wknHomo v thin1 thin2)
 
 export
-wknId : (t : Term ctx ty) -> wkn t Id = t
-wknId (Var i) = Refl
+wknId : Len ctx => (t : Term ctx ty) -> wkn t Thinning.id = t
+wknId (Var i) = cong Var (indexId i)
 wknId (Abs t) = cong Abs (wknId t)
 wknId (App t u) = cong2 App (wknId t) (wknId u)
 wknId Zero = Refl
@@ -136,24 +141,13 @@ indexRestrict :
   (i : Elem ty ctx) ->
   index (restrict sub thin) i = index sub (index thin i)
 indexRestrict thin (Base thin') i = sym $ cong Var $ indexHomo thin' thin i
-indexRestrict Id (sub :< t) i = Refl
 indexRestrict (Drop thin) (sub :< t) i = indexRestrict thin sub i
 indexRestrict (Keep thin) (sub :< t) Here = Refl
 indexRestrict (Keep thin) (sub :< t) (There i) = indexRestrict thin sub i
 
-restrictId : (sub : Terms ctx' ctx) -> restrict sub Id = sub
+restrictId : (len : Len ctx) => (sub : Terms ctx' ctx) -> restrict sub (id @{len}) = sub
 restrictId (Base thin) = cong Base (identityRight thin)
-restrictId (sub :< t) = Refl
-
-export
-restrictKeep :
-  (sub : Terms ctx'' ctx) ->
-  (t : Term ctx'' ty) ->
-  (thin : ctx' `Thins` ctx) ->
-  restrict (sub :< t) (keep thin) = restrict sub thin :< t
-restrictKeep sub t Id = sym $ cong (:< t) $ restrictId sub
-restrictKeep sub t (Drop thin) = Refl
-restrictKeep sub t (Keep thin) = Refl
+restrictId {len = S k} (sub :< t) = cong (:< t) (restrictId sub)
 
 restrictHomo :
   (sub : Terms ctx ctx''') ->
@@ -161,9 +155,7 @@ restrictHomo :
   (thin2 : ctx' `Thins` ctx'') ->
   restrict sub (thin1 . thin2) = restrict (restrict sub thin1) thin2
 restrictHomo (Base thin) thin1 thin2 = cong Base (assoc thin thin1 thin2)
-restrictHomo (sub :< t) Id thin2 = Refl
 restrictHomo (sub :< t) (Drop thin1) thin2 = restrictHomo sub thin1 thin2
-restrictHomo (sub :< t) (Keep thin1) Id = Refl
 restrictHomo (sub :< t) (Keep thin1) (Drop thin2) = restrictHomo sub thin1 thin2
 restrictHomo (sub :< t) (Keep thin1) (Keep thin2) = cong (:< t) $ restrictHomo sub thin1 thin2
 
@@ -173,7 +165,6 @@ wknAllRestrict :
   (thin2 : ctx'' `Thins` ctx''') ->
   restrict (wknAll sub thin2) thin1 = wknAll (restrict sub thin1) thin2
 wknAllRestrict thin1 (Base thin) thin2 = sym $ cong Base $ assoc thin2 thin thin1
-wknAllRestrict Id (sub :< t) thin2 = Refl
 wknAllRestrict (Drop thin) (sub :< t) thin2 = wknAllRestrict thin sub thin2
 wknAllRestrict (Keep thin) (sub :< t) thin2 = cong (:< wkn t thin2) (wknAllRestrict thin sub thin2)
 
@@ -188,16 +179,17 @@ wknSubst :
 wknSubst (Var i) sub thin =
   sym (indexWknAll sub thin i)
 wknSubst (Abs t) sub thin =
+  rewrite lenUnique (termsLen $ wknAll sub thin) (lenTgt thin) in
   cong Abs $ Calc $
-    |~ wkn (subst t (wknAll sub (Drop Id) :< Var Here)) (keep thin)
-    ~~ subst t (wknAll (wknAll sub (Drop Id)) (keep thin) :< Var (index (keep thin) Here))
-      ...(wknSubst t (wknAll sub (Drop Id) :< Var Here) (keep thin))
-    ~~ subst t (wknAll sub (keep thin . Drop Id) :< Var Here)
-      ...(cong2 (\sub, i => subst t (sub :< Var i)) (wknAllHomo sub (Drop Id) (keep thin)) (indexKeepHere thin))
-    ~~ subst t (wknAll sub (Drop Id . thin) :< Var Here)
-      ...(cong (subst t . (:< Var Here) . wknAll sub) $ trans (keepDrop thin Id) (cong Drop $ identityRight thin))
-    ~~ subst t (wknAll (wknAll sub thin) (Drop Id) :< Var Here)
-      ...(sym $ cong (subst t . (:< Var Here)) $ wknAllHomo sub thin (Drop Id))
+    |~ wkn (subst t (wknAll sub (Drop id) :< Var Here)) (Keep thin)
+    ~~ subst t (wknAll (wknAll sub (Drop id)) (Keep thin) :< Var (index (Keep thin) Here))
+      ...(wknSubst t (wknAll sub (Drop id) :< Var Here) (Keep thin))
+    ~~ subst t (wknAll sub (Keep thin . Drop id) :< Var Here)
+      ...(cong (subst t . (:< Var Here)) (wknAllHomo sub (Drop id) (Keep thin)))
+    ~~ subst t (wknAll sub (Drop id . thin) :< Var Here)
+      ...(cong (subst t . (:< Var Here) . wknAll sub . Drop) $ trans (identityRight thin) (sym $ identityLeft thin))
+    ~~ subst t (wknAll (wknAll sub thin) (Drop id) :< Var Here)
+      ...(sym $ cong (subst t . (:< Var Here)) $ wknAllHomo sub thin (Drop id))
 wknSubst (App t u) sub thin =
   cong2 App (wknSubst t sub thin) (wknSubst u sub thin)
 wknSubst Zero sub thin =
@@ -216,14 +208,13 @@ substWkn :
 substWkn (Var i) thin sub =
   sym (indexRestrict thin sub i)
 substWkn (Abs t) thin sub =
+  rewrite lenUnique (termsLen $ restrict sub thin) (termsLen sub) in
   cong Abs $ Calc $
-    |~ subst (wkn t $ keep thin) (wknAll sub (Drop Id) :< Var Here)
-    ~~ subst t (restrict (wknAll sub (Drop Id) :< Var Here) (keep thin))
-      ...(substWkn t (keep thin) (wknAll sub (Drop Id) :< Var Here))
-    ~~ subst t (restrict (wknAll sub (Drop Id)) thin :< Var Here)
-      ...(cong (subst t) $ restrictKeep (wknAll sub (Drop Id)) (Var Here) thin)
-    ~~ subst t (wknAll (restrict sub thin) (Drop Id) :< Var Here)
-      ...(cong (subst t . (:< Var Here)) $ wknAllRestrict thin sub (Drop Id))
+    |~ subst (wkn t $ Keep thin) (wknAll sub (Drop id) :< Var Here)
+    ~~ subst t (restrict (wknAll sub (Drop id)) thin :< Var Here)
+      ...(substWkn t (Keep thin) (wknAll sub (Drop id) :< Var Here))
+    ~~ subst t (wknAll (restrict sub thin) (Drop id) :< Var Here)
+      ...(cong (subst t . (:< Var Here)) $ wknAllRestrict thin sub (Drop id))
 substWkn (App t u) thin sub =
   cong2 App (substWkn t thin sub) (substWkn u thin sub)
 substWkn Zero thin sub =
@@ -236,26 +227,37 @@ substWkn (Rec t u v) thin sub =
 namespace Equiv
   public export
   data Equiv : Terms ctx' ctx -> Terms ctx' ctx -> Type where
-    Base : Equiv (Base (keep thin)) (Base (Drop thin) :< Var Here)
+    Base : Equiv (Base (Keep thin)) (Base (Drop thin) :< Var Here)
     WknAll :
+      (len : Len ctx) =>
       Equiv sub sub' ->
-      Equiv (wknAll sub (Drop Id) :< Var Here) (wknAll sub' (Drop Id) :< Var Here)
+      Equiv
+        (wknAll sub (Drop $ id @{len}) :< Var Here)
+        (wknAll sub' (Drop $ id @{len}) :< Var Here)
 
   %name Equiv prf
 
 indexCong : Equiv sub sub' -> (i : Elem ty ctx) -> index sub i = index sub' i
-indexCong Base Here = irrelevantEq $ cong Var (indexKeepHere _)
-indexCong Base (There i) = irrelevantEq $ cong Var (indexKeepThere _ i)
+indexCong Base Here = Refl
+indexCong Base (There i) = Refl
 indexCong (WknAll prf) Here = Refl
 indexCong (WknAll {sub, sub'} prf) (There i) = Calc $
-  |~ index (wknAll sub (Drop Id)) i
-  ~~ wkn (index sub i) (Drop Id)     ...(indexWknAll sub (Drop Id) i)
-  ~~ wkn (index sub' i) (Drop Id)    ...(cong (flip wkn (Drop Id)) $ indexCong prf i)
-  ~~ index (wknAll sub' (Drop Id)) i ...(sym $ indexWknAll sub' (Drop Id) i)
+  |~ index (wknAll sub (Drop id)) i
+  ~~ wkn (index sub i) (Drop id)     ...(indexWknAll sub (Drop id) i)
+  ~~ wkn (index sub' i) (Drop id)    ...(cong (flip wkn (Drop id)) $ indexCong prf i)
+  ~~ index (wknAll sub' (Drop id)) i ...(sym $ indexWknAll sub' (Drop id) i)
 
-substCong : (t : Term ctx ty) -> Equiv sub sub' -> subst t sub = subst t sub'
+substCong :
+  (len : Len ctx') =>
+  (t : Term ctx ty) ->
+  {0 sub, sub' : Terms ctx' ctx} ->
+  Equiv sub sub' ->
+  subst t sub = subst t sub'
 substCong (Var i) prf = indexCong prf i
-substCong (Abs t) prf = cong Abs (substCong t (WknAll prf))
+substCong (Abs t) prf =
+  rewrite lenUnique (termsLen sub) (termsLen sub') in
+  rewrite lenUnique (termsLen sub') len in
+  cong Abs (substCong t (WknAll prf))
 substCong (App t u) prf = cong2 App (substCong t prf) (substCong u prf)
 substCong Zero prf = Refl
 substCong (Suc t) prf = cong Suc (substCong t prf)
@@ -263,10 +265,12 @@ substCong (Rec t u v) prf = cong3 Rec (substCong t prf) (substCong u prf) (subst
 
 substBase : (t : Term ctx ty) -> (thin : ctx `Thins` ctx') -> subst t (Base thin) = wkn t thin
 substBase (Var i) thin = Refl
-substBase (Abs t) thin = cong Abs $ Calc $
-  |~ subst t (Base (Drop thin) :< Var Here)
-  ~~ subst t (Base $ keep thin)             ...(sym $ substCong t Base)
-  ~~ wkn t (keep thin)                      ...(substBase t (keep thin))
+substBase (Abs t) thin =
+  rewrite identityLeft thin in
+  cong Abs $ Calc $
+    |~ subst t (Base (Drop thin) :< Var Here)
+    ~~ subst t (Base $ Keep thin)             ...(sym $ substCong t Base)
+    ~~ wkn t (Keep thin)                      ...(substBase t (Keep thin))
 substBase (App t u) thin = cong2 App (substBase t thin) (substBase u thin)
 substBase Zero thin = Refl
 substBase (Suc t) thin = cong Suc (substBase t thin)
@@ -322,9 +326,12 @@ baseComp thin (sub :< t) = cong2 (:<) (baseComp thin sub) (substBase t thin)
 -- Substitution
 
 export
-substId : (t : Term ctx ty) -> subst t (Base Id) = t
-substId (Var i) = Refl
-substId (Abs t) = cong Abs $ trans (sym $ substCong t Base) (substId t)
+substId : (len : Len ctx) => (t : Term ctx ty) -> subst t (Base $ id @{len}) = t
+substId (Var i) = cong Var (indexId i)
+substId (Abs t) =
+  rewrite lenUnique (termsLen $ Base $ id @{len}) len in
+  rewrite identitySquared len in
+  cong Abs $ trans (sym $ substCong t Base) (substId t)
 substId (App t u) = cong2 App (substId t) (substId u)
 substId Zero = Refl
 substId (Suc t) = cong Suc (substId t)
@@ -339,18 +346,19 @@ substHomo :
 substHomo (Var i) sub1 sub2 =
   sym $ indexComp sub1 sub2 i
 substHomo (Abs t) sub1 sub2 =
+  rewrite lenUnique (termsLen $ sub2 . sub1) (termsLen sub2) in
   cong Abs $ Calc $
-    |~ subst (subst t (wknAll sub1 (Drop Id) :< Var Here)) (wknAll sub2 (Drop Id) :< Var Here)
-    ~~ subst t ((wknAll sub2 (Drop Id) :< Var Here) . (wknAll sub1 (Drop Id) :< Var Here))
-      ...(substHomo t (wknAll sub1 (Drop Id) :< Var Here) (wknAll sub2 (Drop Id) :< Var Here))
-    ~~ subst t ((wknAll sub2 (Drop Id) :< Var Here) . wknAll sub1 (Drop Id) :< Var Here)
+    |~ subst (subst t (wknAll sub1 (Drop id) :< Var Here)) (wknAll sub2 (Drop id) :< Var Here)
+    ~~ subst t ((wknAll sub2 (Drop id) :< Var Here) . (wknAll sub1 (Drop id) :< Var Here))
+      ...(substHomo t (wknAll sub1 (Drop id) :< Var Here) (wknAll sub2 (Drop id) :< Var Here))
+    ~~ subst t ((wknAll sub2 (Drop id) :< Var Here) . wknAll sub1 (Drop id) :< Var Here)
       ...(Refl)
-    ~~ subst t (restrict (wknAll sub2 (Drop Id)) Id . sub1 :< Var Here)
-      ...(cong (subst t . (:< Var Here)) $ compDrop sub1 (Drop Id) (wknAll sub2 (Drop Id) :< Var Here))
-    ~~ subst t (wknAll sub2 (Drop Id) . sub1 :< Var Here)
-      ...(cong (subst t . (:< Var Here) . (. sub1)) $ restrictId (wknAll sub2 (Drop Id)))
-    ~~ subst t (wknAll (sub2 . sub1) (Drop Id) :< Var Here)
-      ...(cong (subst t . (:< Var Here)) $ wknAllComp sub1 sub2 (Drop Id))
+    ~~ subst t (restrict (wknAll sub2 (Drop id)) id . sub1 :< Var Here)
+      ...(cong (subst t . (:< Var Here)) $ compDrop sub1 (Drop id) (wknAll sub2 (Drop id) :< Var Here))
+    ~~ subst t (wknAll sub2 (Drop id) . sub1 :< Var Here)
+      ...(cong (subst t . (:< Var Here) . (. sub1)) $ restrictId (wknAll sub2 (Drop id)))
+    ~~ subst t (wknAll (sub2 . sub1) (Drop id) :< Var Here)
+      ...(cong (subst t . (:< Var Here)) $ wknAllComp sub1 sub2 (Drop id))
 substHomo (App t u) sub1 sub2 =
   cong2 App (substHomo t sub1 sub2) (substHomo u sub1 sub2)
 substHomo Zero sub1 sub2 =
