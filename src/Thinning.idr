@@ -26,24 +26,16 @@ data Len : SnocList a -> Type where
 %name Len k, m, n
 
 %hint
-export
+public export
 length : (sx : SnocList a) -> Len sx
 length [<] = Z
 length (sx :< x) = S (length sx)
 
 %hint
 export
-lenSrc : sx `Thins` sy -> Len sx
-lenSrc Empty = Z
-lenSrc (Drop thin) = lenSrc thin
-lenSrc (Keep thin) = S (lenSrc thin)
-
-%hint
-export
-lenTgt : sx `Thins` sy -> Len sy
-lenTgt Empty = Z
-lenTgt (Drop thin) = S (lenTgt thin)
-lenTgt (Keep thin) = S (lenTgt thin)
+lenAppend : Len sx -> Len sy -> Len (sx ++ sy)
+lenAppend k Z = k
+lenAppend k (S m) = S (lenAppend k m)
 
 %hint
 export
@@ -101,6 +93,7 @@ data Triangle : sy `Thins` sz -> sx `Thins` sy -> sx `Thins` sz -> Type where
   KeepDrop : Triangle thin2 thin1 thin -> Triangle (Keep thin2) (Drop thin1) (Drop thin)
   KeepKeep : Triangle thin2 thin1 thin -> Triangle (Keep thin2) (Keep thin1) (Keep thin)
 
+public export
 data Overlap = Covers | Partitions
 
 namespace Covering
@@ -190,10 +183,9 @@ export
 map : (forall ctx. t ctx -> u ctx) -> Thinned t ctx -> Thinned u ctx
 map f (value `Over` thin) = f value `Over` thin
 
-%hint
 export
-thinnedLen : Thinned t sx -> Len sx
-thinnedLen (value `Over` thin) = lenTgt thin
+drop : Thinned t ctx -> Thinned t (ctx :< ty)
+drop (value `Over` thin) = value `Over` Drop thin
 
 -- Properties ------------------------------------------------------------------
 

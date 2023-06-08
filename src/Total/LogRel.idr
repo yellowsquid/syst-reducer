@@ -181,19 +181,18 @@ allValid help (Abs t) sub allRels =
   (let
       rec =
         valid
-          (wknAll sub (Drop $ id @{termsLen sub}) :< Var Here)
-          (wknAllRel help allRels (Drop $ id @{termsLen sub}) :< help.var Here)
+          (wknAll sub (Drop id) :< Var Here)
+          (wknAllRel help allRels (Drop id) :< help.var Here)
     in
       help.abs rec
   , \thin, u, rel =>
     let
       eq :
         (subst
-          (wkn (subst t (wknAll sub (Drop $ id @{termsLen sub}) :< Var Here)) (Keep thin))
-          (Base (id @{length _}) :< u) =
+          (wkn (subst t (wknAll sub (Drop Thinning.id) :< Var Here)) (Keep thin))
+          (Base Thinning.id :< u) =
          subst t (wknAll sub thin :< u))
       eq =
-        rewrite lenUnique (termsLen sub) (length ctx') in
         Calc $
           |~ subst (wkn (subst t (wknAll sub (Drop id) :< Var Here)) (Keep thin)) (Base id :< u)
           ~~ subst (subst t (wknAll sub (Drop id) :< Var Here)) (restrict (Base id :< u) (Keep thin))
@@ -219,8 +218,8 @@ allValid help (Abs t) sub allRels =
 allValid help (App t u) sub allRels =
   let (pt, app) = allValid help t sub allRels in
   let rel = allValid help u sub allRels in
-  rewrite sym $ wknId @{termsLen sub} (subst t sub) in
-    app (id @{termsLen sub}) (subst u sub) rel
+  rewrite sym $ wknId (subst t sub) in
+    app id (subst u sub) rel
 allValid help Zero sub allRels = help.zero
 allValid help (Suc t) sub allRels =
   let pt = allValid help t sub allRels in
@@ -240,4 +239,4 @@ allRel :
   (t : Term ctx ty) ->
   P t
 allRel help t =
-  rewrite sym $ substId @{length ctx} t in escape (allValid help t (Base $ id @{length ctx}) Base)
+  rewrite sym $ substId t in escape (allValid help t (Base id) Base)

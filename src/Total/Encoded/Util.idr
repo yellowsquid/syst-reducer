@@ -14,22 +14,22 @@ namespace Bool
   B = N
 
   export
-  True : Term ctx B
-  True = Zero
+  true : FullTerm B [<]
+  true = zero
 
   export
-  False : Term ctx B
-  False = Suc Zero
+  false : FullTerm B [<]
+  false = suc zero
 
   export
-  If : Len ctx => Term ctx B -> Term ctx ty -> Term ctx ty -> Term ctx ty
-  If t u v = Rec t u (Abs $ wkn v (Drop id))
+  if' : FullTerm (B ~> ty ~> ty ~> ty) [<]
+  if' = abs' (S $ S $ S Z) (\b, t, f => rec b t (abs $ drop f))
 
 namespace Arb
   export
-  arb : {ty : Ty} -> Term [<] ty
-  arb {ty = N} = Zero
-  arb {ty = ty ~> ty'} = Abs (lift arb)
+  arb : {ty : Ty} -> FullTerm ty [<]
+  arb {ty = N} = zero
+  arb {ty = ty ~> ty'} = abs (lift arb)
 
 namespace Union
   export
@@ -40,33 +40,34 @@ namespace Union
   (t ~> t') <+> (u ~> u') = (t <+> u) ~> (t' <+> u')
 
   export
-  injL : {t, u : Ty} -> Term [<] (t ~> (t <+> u))
+  swap : {t, u : Ty} -> FullTerm ((t <+> u) ~> (u <+> t)) [<]
+  swap {t = N, u = N} = id
+  swap {t = N, u = u ~> u'} = id
+  swap {t = t ~> t', u = N} = id
+  swap {t = t ~> t', u = u ~> u'} = abs' (S Z) (\f => drop swap . f . drop swap)
+
   export
-  injR : {t, u : Ty} -> Term [<] (u ~> (t <+> u))
+  injL : {t, u : Ty} -> FullTerm (t ~> (t <+> u)) [<]
   export
-  prjL : {t, u : Ty} -> Term [<] ((t <+> u) ~> t)
+  injR : {t, u : Ty} -> FullTerm (u ~> (t <+> u)) [<]
   export
-  prjR : {t, u : Ty} -> Term [<] ((t <+> u) ~> u)
+  prjL : {t, u : Ty} -> FullTerm ((t <+> u) ~> t) [<]
+  export
+  prjR : {t, u : Ty} -> FullTerm ((t <+> u) ~> u) [<]
 
-  injL {t = N, u = N} = Abs' (S Z) id
-  injL {t = N, u = u ~> u'} = Abs' (S $ S Z) (\n, _ => App (lift (prjR . injL)) n)
-  injL {t = t ~> t', u = N} = Abs' (S Z) id
-  injL {t = t ~> t', u = u ~> u'} = Abs' (S Z) (\f => lift injL . f . lift prjL)
+  injL {t = N, u = N} = id
+  injL {t = N, u = u ~> u'} = abs' (S $ S Z) (\n, _ => app (lift (prjR . injL)) n)
+  injL {t = t ~> t', u = N} = id
+  injL {t = t ~> t', u = u ~> u'} = abs' (S Z) (\f => drop injL . f . drop prjL)
 
-  injR {t = N, u = N} = Abs' (S Z) id
-  injR {t = N, u = u ~> u'} = Abs' (S Z) id
-  injR {t = t ~> t', u = N} = Abs' (S $ S Z) (\n, _ => App (lift (prjL . injR)) n)
-  injR {t = t ~> t', u = u ~> u'} = Abs' (S Z) (\f => lift injR . f . lift prjR)
+  injR = swap . injL
 
-  prjL {t = N, u = N} = Abs' (S Z) id
-  prjL {t = N, u = u ~> u'} = Abs' (S Z) (\f => App (lift (prjL . injR) . f) (lift $ arb))
-  prjL {t = t ~> t', u = N} = Abs' (S Z) id
-  prjL {t = t ~> t', u = u ~> u'} = Abs' (S Z) (\f => lift prjL . f . lift injL)
+  prjL {t = N, u = N} = id
+  prjL {t = N, u = u ~> u'} = abs' (S Z) (\f => app (drop (prjL . injR) . f) (drop arb))
+  prjL {t = t ~> t', u = N} = id
+  prjL {t = t ~> t', u = u ~> u'} = abs' (S Z) (\f => drop prjL . f . drop injL)
 
-  prjR {t = N, u = N} = Abs' (S Z) id
-  prjR {t = N, u = u ~> u'} = Abs' (S Z) id
-  prjR {t = t ~> t', u = N} = Abs' (S Z) (\f => App (lift (prjR . injL) . f) (lift $ arb))
-  prjR {t = t ~> t', u = u ~> u'} = Abs' (S Z) (\f => lift prjR . f . lift injR)
+  prjR = prjL . swap
 
 namespace Unit
   export
@@ -79,33 +80,33 @@ namespace Pair
   t * u = B ~> (t <+> u)
 
   export
-  pair : {t, u : Ty} -> Term [<] (t ~> u ~> (t * u))
-  pair = Abs' (S $ S $ S Z)
-    (\fst, snd, b => If b (App (lift injL) fst) (App (lift injR) snd))
+  pair : {t, u : Ty} -> FullTerm (t ~> u ~> (t * u)) [<]
+  pair = abs' (S $ S $ S Z)
+    (\fst, snd, b => app' (lift if') [<b, app (lift injL) fst, app (lift injR) snd])
 
   export
-  fst : {t, u : Ty} -> Term [<] ((t * u) ~> t)
-  fst = Abs' (S Z) (\p => App (lift prjL . p) True)
+  fst : {t, u : Ty} -> FullTerm ((t * u) ~> t) [<]
+  fst = abs' (S Z) (\p => app (drop prjL . p) (drop true))
 
   export
-  snd : {t, u : Ty} -> Term [<] ((t * u) ~> u)
-  snd = Abs' (S Z) (\p => App (lift prjR . p) False)
+  snd : {t, u : Ty} -> FullTerm ((t * u) ~> u) [<]
+  snd = abs' (S Z) (\p => app (drop prjR . p) (drop false))
 
   export
-  mapSnd : {t, u, v : Ty} -> Term [<] ((u ~> v) ~> (t * u) ~> (t * v))
-  mapSnd = Abs' (S $ S Z) (\f, p => App' (lift pair) [<App (lift fst) p , App (f . lift snd) p])
+  mapSnd : {t, u, v : Ty} -> FullTerm ((u ~> v) ~> (t * u) ~> (t * v)) [<]
+  mapSnd = abs' (S $ S Z) (\f, p => app' (lift pair) [<app (lift fst) p , app (f . lift snd) p])
 
   export
   Product : SnocList Ty -> Ty
   Product = foldl (*) Unit
 
   export
-  pair' : {tys : SnocList Ty} -> Term [<] (tys ~>* Product tys)
+  pair' : {tys : SnocList Ty} -> FullTerm (tys ~>* Product tys) [<]
   pair' {tys = [<]} = arb
-  pair' {tys = tys :< ty} = Abs' (S $ S Z) (\p, t => App' (lift pair) [<p, t]) .* pair' {tys}
+  pair' {tys = tys :< ty} = abs' (S $ S Z) (\p, t => app' (lift pair) [<p, t]) .* pair'
 
   export
-  project : {tys : SnocList Ty} -> Elem ty tys -> Term [<] (Product tys ~> ty)
+  project : {tys : SnocList Ty} -> Elem ty tys -> FullTerm (Product tys ~> ty) [<]
   project {tys = tys :< ty} Here = snd
   project {tys = tys :< ty} (There i) = project i . fst
 
@@ -113,15 +114,15 @@ namespace Pair
   mapProd :
     {ctx, tys, tys' : SnocList Ty} ->
     {auto 0 prf : SnocList.length tys = SnocList.length tys'} ->
-    All (Term ctx) (zipWith (~>) tys tys') ->
-    Term ctx (Product tys ~> Product tys')
-  mapProd {tys = [<], tys' = [<]} [<] = Abs (Var Here)
+    All (flip FullTerm ctx) (zipWith (~>) tys tys') ->
+    FullTerm (Product tys ~> Product tys') ctx
+  mapProd {tys = [<], tys' = [<]} [<] = lift id
   mapProd {tys = tys :< ty, tys' = tys' :< ty', prf} (fs :< f) =
-    Abs' (S Z)
+    abs' (S Z)
       (\p =>
-        App' (lift pair)
-          [<App (wkn (mapProd fs {prf = injective prf}) (Drop id) . lift fst) p
-          , App (wkn f (Drop id) . lift snd) p
+        app' (lift pair)
+          [<app (drop (mapProd fs {prf = injective prf}) . lift fst) p
+          , app (drop f . lift snd) p
           ])
 
   replicate : Nat -> a -> SnocList a
@@ -149,36 +150,36 @@ namespace Pair
   mapVect :
     {n : Nat} ->
     {ty, ty' : Ty} ->
-    Term [<] ((ty ~> ty') ~> Vect n ty ~> Vect n ty')
+    FullTerm ((ty ~> ty') ~> Vect n ty ~> Vect n ty') [<]
   mapVect =
-    Abs' (S Z)
+    abs' (S Z)
       (\f => mapProd {prf = trans (replicateLen n) (sym $ replicateLen n)} $ zipReplicate f)
 
   export
-  Nil : {ty : Ty} -> Term [<] (Vect 0 ty)
-  Nil = arb
+  nil : {ty : Ty} -> FullTerm (Vect 0 ty) [<]
+  nil = arb
 
   export
-  Cons : {n : Nat} -> {ty : Ty} -> Term [<] (ty ~> Vect n ty ~> Vect (S n) ty)
-  Cons = Abs' (S $ S Z) (\t, ts => App' (lift pair) [<ts, t])
+  cons : {n : Nat} -> {ty : Ty} -> FullTerm (ty ~> Vect n ty ~> Vect (S n) ty) [<]
+  cons = abs' (S $ S Z) (\t, ts => app' (lift pair) [<ts, t])
 
   export
-  head : {n : Nat} -> {ty : Ty} -> Term [<] (Vect (S n) ty ~> ty)
+  head : {n : Nat} -> {ty : Ty} -> FullTerm (Vect (S n) ty ~> ty) [<]
   head = snd
 
   export
-  tail : {n : Nat} -> {ty : Ty} -> Term [<] (Vect (S n) ty ~> Vect n ty)
+  tail : {n : Nat} -> {ty : Ty} -> FullTerm (Vect (S n) ty ~> Vect n ty) [<]
   tail = fst
 
   export
-  index : {n : Nat} -> {ty : Ty} -> (i : Fin n) -> Term [<] (Vect n ty ~> ty)
+  index : {n : Nat} -> {ty : Ty} -> (i : Fin n) -> FullTerm (Vect n ty ~> ty) [<]
   index FZ = head
   index (FS i) = index i . tail
 
   export
-  enumerate : (n : Nat) -> Term [<] (Vect n N)
+  enumerate : (n : Nat) -> FullTerm (Vect n N) [<]
   enumerate 0 = arb
-  enumerate (S k) = App' pair [<App' mapVect [<Abs' (S Z) Suc, enumerate k], Zero]
+  enumerate (S k) = app' pair [<app' mapVect [<abs' (S Z) suc, enumerate k], zero]
 
 namespace Sum
   export
@@ -186,20 +187,25 @@ namespace Sum
   t + u = B * (t <+> u)
 
   export
-  left : {t, u : Ty} -> Term [<] (t ~> (t + u))
-  left = Abs' (S Z) (\e => App' (lift pair) [<True, App (lift injL) e])
+  left : {t, u : Ty} -> FullTerm (t ~> (t + u)) [<]
+  left = abs' (S Z) (\e => app' (drop pair) [<drop true, app (drop injL) e])
 
   export
-  right : {t, u : Ty} -> Term [<] (u ~> (t + u))
-  right = Abs' (S Z) (\e => App' (lift pair) [<False, App (lift injR) e])
+  right : {t, u : Ty} -> FullTerm (u ~> (t + u)) [<]
+  right = abs' (S Z) (\e => app' (drop pair) [<drop false, app (drop injR) e])
 
   export
-  case' : {t, u, ty : Ty} -> Term [<] ((t ~> ty) ~> (u ~> ty) ~> (t + u) ~> ty)
-  case' = Abs' (S $ S $ S Z)
-    (\f, g, s =>
-      If (App (lift fst) s)
-        (App (f . lift (prjL . snd)) s)
-        (App (g . lift (prjR . snd)) s))
+  case' : {t, u, ty : Ty} -> FullTerm ((t + u) ~> (t ~> ty) ~> (u ~> ty) ~> ty) [<]
+  case' = abs' (S $ S $ S Z)
+    (\s, f, g =>
+      app' (lift if')
+        [<app (lift fst) s
+        , app (f . lift (prjL . snd)) s
+        , app (g . lift (prjR . snd)) s])
+
+  export
+  either : {t, u, ty : Ty} -> FullTerm ((t ~> ty) ~> (u ~> ty) ~> (t + u) ~> ty) [<]
+  either = abs' (S $ S $ S Z) (\f, g, s => app' (lift case') [<s, f, g])
 
   Sum' : Ty -> List Ty -> Ty
   Sum' ty [] = ty
@@ -213,88 +219,89 @@ namespace Sum
     {ty, ty' : Ty} ->
     {tys : List Ty} ->
     (i : Elem ty (ty' :: tys)) ->
-    Term [<] (ty ~> Sum' ty' tys)
-  put' {tys = []} Here = Abs' (S Z) id
+    FullTerm (ty ~> Sum' ty' tys) [<]
+  put' {tys = []} Here = id
   put' {tys = _ :: _} Here = left
   put' {tys = _ :: _} (There i) = right . put' i
 
   export
-  put : {tys : List1 Ty} -> {ty : Ty} -> (i : Elem ty (forget tys)) -> Term [<] (ty ~> Sum tys)
+  put : {tys : List1 Ty} -> {ty : Ty} -> (i : Elem ty (forget tys)) -> FullTerm (ty ~> Sum tys) [<]
   put {tys = _ ::: _} i = put' i
 
-  caseAll' :
+  any' :
     {ctx : SnocList Ty} ->
     {ty, ty' : Ty} ->
     {tys : List Ty} ->
-    All (Term ctx . (~> ty)) (ty' :: tys) ->
-    Term ctx (Sum' ty' tys ~> ty)
-  caseAll' (t :: []) = t
-  caseAll' (t :: u :: ts) = App' (lift case') [<t, caseAll' (u :: ts)]
+    All (flip FullTerm ctx . (~> ty)) (ty' :: tys) ->
+    FullTerm (Sum' ty' tys ~> ty) ctx
+  any' (t :: []) = t
+  any' (t :: u :: ts) = app' (lift either) [<t, any' (u :: ts)]
 
   export
-  caseAll :
+  any :
     {ctx : SnocList Ty} ->
     {tys : List1 Ty} ->
     {ty : Ty} ->
-    All (Term ctx . (~> ty)) (forget tys) ->
-    Term ctx (Sum tys ~> ty)
-  caseAll {tys = _ ::: _} = caseAll'
+    All (flip FullTerm ctx . (~> ty)) (forget tys) ->
+    FullTerm (Sum tys ~> ty) ctx
+  any {tys = _ ::: _} = any'
 
 namespace Nat
   export
-  IsZero : Term [<] (N ~> B)
-  IsZero = Abs' (S Z) (\m => Rec m (lift True) (Abs (lift False)))
+  isZero : FullTerm (N ~> B) [<]
+  isZero = abs' (S Z) (\m => rec m (drop true) (abs (lift false)))
 
   export
-  Add : Term [<] (N ~> N ~> N)
-  Add = Abs' (S $ S Z) (\m, n => Rec m n (Abs' (S Z) Suc))
+  add : FullTerm (N ~> N ~> N) [<]
+  add = abs' (S $ S Z) (\m, n => rec m n (abs' (S Z) suc))
 
   export
-  sum : {n : Nat} -> Term [<] (Vect n N ~> N)
-  sum {n = 0} = Abs Zero
-  sum {n = S k} = Abs' (S Z)
-    (\ns => App' (lift Add) [<App (lift head) ns, App (lift (sum . tail)) ns])
+  sum : {n : Nat} -> FullTerm (Vect n N ~> N) [<]
+  sum {n = 0} = abs zero
+  sum {n = S k} = abs' (S Z)
+    (\ns => app' (lift add) [<app (lift head) ns, app (lift (sum . tail)) ns])
 
   export
-  Pred : Term [<] (N ~> N)
-  Pred = Abs' (S Z)
+  pred : FullTerm (N ~> N) [<]
+  pred = abs' (S Z)
     (\m =>
-      App' (lift case')
-        [<Abs Zero
-        , Abs' (S Z) id
-        , Rec m
-            (lift $ App left (arb {ty = Unit}))
-            (App' (lift case')
-              [<Abs (lift $ App right Zero)
-              , Abs' (S Z) (\n => App (lift right) (Suc n))
+      app' (lift case')
+        [<rec m
+            (lift $ app left (arb {ty = Unit}))
+            (app' (lift either)
+              [<abs (lift $ app right zero)
+              , abs' (S Z) (\n => app (lift right) (suc n))
               ])
+        , abs zero
+        , drop id
         ])
 
   export
-  Sub : Term [<] (N ~> N ~> N)
-  Sub = Abs' (S $ S Z) (\m, n => Rec n m (lift Pred))
+  sub : FullTerm (N ~> N ~> N) [<]
+  sub = abs' (S $ S Z) (\m, n => rec n m (lift pred))
 
   export
-  LE : Term [<] (N ~> N ~> B)
-  LE = Abs' (S Z) (\m => lift IsZero . App (lift Sub) m)
+  le : FullTerm (N ~> N ~> B) [<]
+  le = abs' (S Z) (\m => lift isZero . app (lift sub) m)
 
   export
-  LT : Term [<] (N ~> N ~> B)
-  LT = Abs' (S Z) (\m => App (lift LE) (Suc m))
+  lt : FullTerm (N ~> N ~> B) [<]
+  lt = abs' (S Z) (\m => app (lift le) (suc m))
 
   export
-  Cond :
+  cond :
     {ctx : SnocList Ty} ->
     {ty : Ty} ->
-    List (Term ctx N, Term ctx (N ~> ty)) ->
-    Term ctx (N ~> ty)
-  Cond [] = lift arb
-  Cond ((n, v) :: xs) =
-    Abs' (S Z)
+    List (FullTerm N ctx, FullTerm (N ~> ty) ctx) ->
+    FullTerm (N ~> ty) ctx
+  cond [] = lift arb
+  cond ((n, v) :: xs) =
+    abs' (S Z)
       (\t =>
-        If (App' (lift LE) [<t, wkn n (Drop id)])
-          (App (wkn v (Drop id)) t)
-          (App (wkn (Cond xs) (Drop id)) (App' (lift Sub) [<t, wkn n (Drop id)])))
+        app' (lift if')
+          [<app' (lift le) [<t, drop n]
+          , app (drop v) t
+          , app (drop $ cond xs) (app' (lift sub) [<t, drop n])])
 
 namespace Data
   public export
@@ -323,7 +330,7 @@ namespace Data
   mapShape :
     {shape : Shape} ->
     {ty, ty' : Ty} ->
-    Term [<] ((ty ~> ty') ~> fillShape shape ty ~> fillShape shape ty')
+    FullTerm ((ty ~> ty') ~> fillShape shape ty ~> fillShape shape ty') [<]
   mapShape {shape = (shape, n)} = mapSnd . mapVect
 
   gmap :
@@ -347,55 +354,55 @@ namespace Data
     {ctx : SnocList Ty} ->
     {c : Container} ->
     {n : Nat} ->
-    (ts : Term ctx (Vect n (fix c))) ->
-    (acc : Term ctx N) ->
-    List (Term ctx N, Term ctx (N ~> N))
+    (ts : FullTerm (Vect n (fix c)) ctx) ->
+    (acc : FullTerm N ctx) ->
+    List (FullTerm N ctx, FullTerm (N ~> N) ctx)
   calcOffsets {n = 0} ts acc = []
   calcOffsets {n = S k} ts acc =
-    let hd = App (lift head) ts in
-    let n = App (lift $ project $ There $ There Here) hd in
-    let offset = App (lift $ project $ There Here) hd in
-    (n, App (lift Add) acc . offset) ::
+    let hd = app (lift head) ts in
+    let n = app (lift $ project $ There $ There Here) hd in
+    let offset = app (lift $ project $ There Here) hd in
+    (n, app (lift add) acc . offset) ::
     calcOffsets
-      (App (lift tail) ts)
-      (App' (lift Add) [<Suc n, acc])
+      (app (lift tail) ts)
+      (app' (lift add) [<suc n, acc])
 
   calcData :
     {ctx : SnocList Ty} ->
     {c : Container} ->
     {n : Nat} ->
-    (ts : Term ctx (Vect n (fix c))) ->
-    (acc : Term ctx N) ->
-    List (Term ctx N, Term ctx (N ~> fill c N))
+    (ts : FullTerm (Vect n (fix c)) ctx) ->
+    (acc : FullTerm N ctx) ->
+    List (FullTerm N ctx, FullTerm (N ~> fill c N) ctx)
   calcData {n = 0} ts acc = []
   calcData {n = S k} ts acc =
-    let hd = App (lift head) ts in
-    let n = App (lift $ project $ There $ There Here) hd in
-    (n, App (lift $ project Here) hd) ::
+    let hd = app (lift head) ts in
+    let n = app (lift $ project $ There $ There Here) hd in
+    (n, app (lift $ project Here) hd) ::
     calcData
-      (App (lift tail) ts)
-      (App' (lift Add) [<Suc n, acc])
+      (app (lift tail) ts)
+      (app' (lift add) [<suc n, acc])
 
   export
   intro :
     {c : Container} ->
     {shape : Shape} ->
     Elem shape (forget c) ->
-    Term [<] (fillShape shape (fix c) ~> fix c)
-  intro {shape = (shape, n)} i = Abs' (S Z)
+    FullTerm (fillShape shape (fix c) ~> fix c) [<]
+  intro {shape = (shape, n)} i = abs' (S Z)
     (\t =>
-      App' (lift $ pair' {tys = [<N, N ~> N, N ~> fill c N]})
-        [<App (lift (sum . App mapVect (Abs' (S Z) Suc . project (There $ There Here)) . snd)) t
-        , Cond ((Zero, Abs' (S Z) Suc) :: calcOffsets (App (lift snd) t) (Suc Zero))
-        , Cond
-          (  (Zero,
-              Abs
-                (App
+      app' (lift $ pair' {tys = [<N, N ~> N, N ~> fill c N]})
+        [<app (lift (sum . app mapVect (abs' (S Z) suc . project (There $ There Here)) . snd)) t
+        , cond ((zero, abs' (S Z) suc) :: calcOffsets (app (lift snd) t) (suc zero))
+        , cond
+          (  (zero,
+              abs
+                (app
                   (lift $ put {tys = map (flip fillShape N) c} $
                     rewrite forgetMap (flip fillShape N) c in
                     elemMap (flip fillShape N) i)
-                  (App' (lift mapSnd) [<Abs (lift $ enumerate n), wkn t (Drop id)])))
-          :: calcData (App (lift snd) t) (Suc Zero)
+                  (app' (lift mapSnd) [<abs (lift $ enumerate n), drop t])))
+          :: calcData (app (lift snd) t) (suc zero)
           )
         ])
 
@@ -404,28 +411,28 @@ namespace Data
     {c : Container} ->
     {ctx : SnocList Ty} ->
     {ty : Ty} ->
-    All (Term ctx . (~> ty) . flip Data.fillShape ty) (forget c) ->
-    Term ctx (fix c ~> ty)
-  elim cases = Abs' (S Z)
+    All (flip FullTerm ctx . (~> ty) . flip Data.fillShape ty) (forget c) ->
+    FullTerm (fix c ~> ty) ctx
+  elim cases = abs' (S Z)
     (\t =>
-      let tags = Suc (App (lift $ project $ There $ There Here) t) in
-      let offset = App (lift $ project $ There Here) (wkn t (Drop $ Drop id)) in
-      let vals = App (lift $ project $ Here) (wkn t (Drop $ Drop id)) in
-      App'
-        (Rec tags
+      let tags = suc (app (lift $ project $ There $ There Here) t) in
+      let offset = app (lift $ project $ There Here) (drop $ drop t) in
+      let vals = app (lift $ project $ Here) (drop $ drop t) in
+      app'
+        (rec tags
           (lift arb)
-          (Abs' (S $ S Z) (\rec, n =>
-            App
-              (caseAll {tys = map (flip fillShape N) c}
+          (abs' (S $ S Z) (\rec, n =>
+            app
+              (any {tys = map (flip fillShape N) c}
                 (rewrite forgetMap (flip fillShape N) c in
                  gmap
                    (\f =>
-                     wkn f (Drop $ Drop $ Drop id) .
-                     App (lift mapShape) (rec . App (lift Add) (App offset n)))
+                     drop (drop $ drop f) .
+                     app (lift mapShape) (rec . app (lift add) (app offset n)))
                    cases) .
                vals)
               n)))
-        [<Zero])
+        [<zero])
 
   -- elim cases (#tags-1,offset,data) =
   --   let

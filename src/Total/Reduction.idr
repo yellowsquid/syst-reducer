@@ -70,28 +70,37 @@ RecCong3' (steps :< step) = RecCong3' steps :< RecCong3 step
 -- Properties ------------------------------------------------------------------
 
 lemma :
-  (0 len : Len ctx) ->
   (t : Term (ctx :< ty) ty') ->
   (thin : ctx `Thins` ctx') ->
   (u : Term ctx ty) ->
-  subst (wkn t (Keep thin)) (Base Thinning.id :< wkn u thin) = wkn (subst t (Base (id @{len}) :< u)) thin
-lemma len t thin u = Calc $
-  |~ subst (wkn t (Keep thin)) (Base id :< wkn u thin)
-  ~~ subst t (restrict (Base id :< wkn u thin) (Keep thin))
-    ...(substWkn t (Keep thin) (Base id :< wkn u thin))
-  ~~ subst t (Base (id . thin) :< wkn u thin)
-    ...(Refl)
-  ~~ subst t (Base (thin . id) :< wkn u thin)
-    ...(cong (subst t . (:< wkn u thin) . Base) $ trans (identityLeft thin) (sym $ identityRight thin))
-  ~~ wkn (subst t (Base id :< u)) thin
-    ...(sym $ wknSubst t (Base id :< u) thin)
+  subst (wkn t (Keep thin)) (Base Thinning.id :< wkn u thin) =
+  wkn (subst t (Base Thinning.id :< u)) thin
+lemma t thin u =
+  Calc $
+    |~ subst (wkn t (Keep thin)) (Base id :< wkn u thin)
+    ~~ subst t (restrict (Base id :< wkn u thin) (Keep thin))
+      ...(substWkn t (Keep thin) (Base id :< wkn u thin))
+    ~~ subst t (Base (id . thin) :< wkn u thin)
+      ...(Refl)
+    ~~ subst t (Base (thin . id) :< wkn u thin)
+      ...(cong (subst t . (:< wkn u thin) . Base) $ trans (identityLeft thin) (sym $ identityRight thin))
+    ~~ wkn (subst t (Base (id) :< u)) thin
+      ...(sym $ wknSubst t (Base (id @{length ctx}) :< u) thin)
 
 export
 wknStep : t > u -> wkn t thin > wkn u thin
 wknStep (AbsCong step) = AbsCong (wknStep step)
 wknStep (AppCong1 step) = AppCong1 (wknStep step)
 wknStep (AppCong2 step) = AppCong2 (wknStep step)
-wknStep (AppBeta len {t, u}) {thin} = rewrite sym $ lemma len t thin u in AppBeta _
+wknStep (AppBeta len {ctx, t, u}) {thin} =
+  let
+    0 eq :
+      (subst (wkn t (Keep thin)) (Base Thinning.id :< wkn u thin) =
+       wkn (subst t (Base (id @{len}) :< u)) thin)
+    eq = rewrite lenUnique len (length ctx) in lemma t thin u
+  in
+    rewrite sym eq in
+    AppBeta _
 wknStep (SucCong step) = SucCong (wknStep step)
 wknStep (RecCong1 step) = RecCong1 (wknStep step)
 wknStep (RecCong2 step) = RecCong2 (wknStep step)

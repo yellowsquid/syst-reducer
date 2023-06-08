@@ -42,12 +42,6 @@ data Terms : SnocList Ty -> SnocList Ty -> Type where
 
 %name Terms sub
 
-%hint
-export
-termsLen : Terms ctx' ctx -> Len ctx'
-termsLen (Base thin) = lenTgt thin
-termsLen (sub :< t) = termsLen sub
-
 public export
 index : Terms ctx' ctx -> Elem ty ctx -> Term ctx' ty
 index (Base thin) i = Var (index thin i)
@@ -60,7 +54,7 @@ wknAll (Base thin') thin = Base (thin . thin')
 wknAll (sub :< t) thin = wknAll sub thin :< wkn t thin
 
 public export
-subst : Term ctx ty -> Terms ctx' ctx -> Term ctx' ty
+subst : Len ctx' => Term ctx ty -> Terms ctx' ctx -> Term ctx' ty
 subst (Var i) sub = index sub i
 subst (Abs t) sub = Abs (subst t $ wknAll sub (Drop id) :< Var Here)
 subst (App t u) sub = App (subst t sub) (subst u sub)
@@ -75,7 +69,7 @@ restrict (sub :< t) (Drop thin) = restrict sub thin
 restrict (sub :< t) (Keep thin) = restrict sub thin :< t
 
 public export
-(.) : Terms ctx'' ctx' -> Terms ctx' ctx -> Terms ctx'' ctx
+(.) : Len ctx'' => Terms ctx'' ctx' -> Terms ctx' ctx -> Terms ctx'' ctx
 sub2 . (Base thin) = restrict sub2 thin
 sub2 . (sub1 :< t) = sub2 . sub1 :< subst t sub2
 
@@ -179,7 +173,6 @@ wknSubst :
 wknSubst (Var i) sub thin =
   sym (indexWknAll sub thin i)
 wknSubst (Abs t) sub thin =
-  rewrite lenUnique (termsLen $ wknAll sub thin) (lenTgt thin) in
   cong Abs $ Calc $
     |~ wkn (subst t (wknAll sub (Drop id) :< Var Here)) (Keep thin)
     ~~ subst t (wknAll (wknAll sub (Drop id)) (Keep thin) :< Var (index (Keep thin) Here))
@@ -208,7 +201,6 @@ substWkn :
 substWkn (Var i) thin sub =
   sym (indexRestrict thin sub i)
 substWkn (Abs t) thin sub =
-  rewrite lenUnique (termsLen $ restrict sub thin) (termsLen sub) in
   cong Abs $ Calc $
     |~ subst (wkn t $ Keep thin) (wknAll sub (Drop id) :< Var Here)
     ~~ subst t (restrict (wknAll sub (Drop id)) thin :< Var Here)
@@ -254,10 +246,7 @@ substCong :
   Equiv sub sub' ->
   subst t sub = subst t sub'
 substCong (Var i) prf = indexCong prf i
-substCong (Abs t) prf =
-  rewrite lenUnique (termsLen sub) (termsLen sub') in
-  rewrite lenUnique (termsLen sub') len in
-  cong Abs (substCong t (WknAll prf))
+substCong (Abs t) prf = cong Abs (substCong t (WknAll prf))
 substCong (App t u) prf = cong2 App (substCong t prf) (substCong u prf)
 substCong Zero prf = Refl
 substCong (Suc t) prf = cong Suc (substCong t prf)
@@ -329,7 +318,6 @@ export
 substId : (len : Len ctx) => (t : Term ctx ty) -> subst t (Base $ id @{len}) = t
 substId (Var i) = cong Var (indexId i)
 substId (Abs t) =
-  rewrite lenUnique (termsLen $ Base $ id @{len}) len in
   rewrite identitySquared len in
   cong Abs $ trans (sym $ substCong t Base) (substId t)
 substId (App t u) = cong2 App (substId t) (substId u)
@@ -346,7 +334,6 @@ substHomo :
 substHomo (Var i) sub1 sub2 =
   sym $ indexComp sub1 sub2 i
 substHomo (Abs t) sub1 sub2 =
-  rewrite lenUnique (termsLen $ sub2 . sub1) (termsLen sub2) in
   cong Abs $ Calc $
     |~ subst (subst t (wknAll sub1 (Drop id) :< Var Here)) (wknAll sub2 (Drop id) :< Var Here)
     ~~ subst t ((wknAll sub2 (Drop id) :< Var Here) . (wknAll sub1 (Drop id) :< Var Here))
