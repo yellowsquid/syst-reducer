@@ -77,6 +77,7 @@ sub2 . (sub1 :< t) = sub2 . sub1 :< subst t sub2
 
 -- Utilities
 
+export
 cong3 : (0 f : a -> b -> c -> d) -> x1 = x2 -> y1 = y2 -> z1 = z2 -> f x1 y1 z1 = f x2 y2 z2
 cong3 f Refl Refl Refl = Refl
 

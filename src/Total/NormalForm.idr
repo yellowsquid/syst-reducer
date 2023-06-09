@@ -3,143 +3,185 @@ module Total.NormalForm
 import Total.LogRel
 import Total.Reduction
 import Total.Term
+import Total.Term.CoDebruijn
 
 %prefix_record_projections off
 
 public export
-data Neutral : Term ctx ty -> Type
+data Neutral' : CoTerm ty ctx -> Type
 public export
-data Normal : Term ctx ty -> Type
+data Normal' : CoTerm ty ctx -> Type
+
+public export
+data Neutral : FullTerm ty ctx -> Type
+
+public export
+data Normal : FullTerm ty ctx -> Type
+
+data Neutral' where
+  Var : Neutral' Var
+  App : Neutral t -> Normal u -> Neutral' (App (MakePair t u cover))
+  Rec :
+    Neutral t ->
+    Normal u ->
+    Normal v ->
+    Neutral' (Rec (MakePair t (MakePair u v cover1 `Over` thin) cover2))
+
+data Normal' where
+  Ntrl : Neutral' t -> Normal' t
+  Abs : Normal' t -> Normal' (Abs (MakeBound t thin))
+  Zero : Normal' Zero
+  Suc : Normal' t -> Normal' (Suc t)
 
 data Neutral where
-  Var : Neutral (Var i)
-  App : Neutral t -> Normal u -> Neutral (App t u)
-  Rec : Neutral t -> Normal u -> Normal v -> Neutral (Rec t u v)
+  WrapNe : Neutral' t -> Neutral (t `Over` thin)
 
 data Normal where
-  Ntrl : Neutral t -> Normal t
-  Abs : Normal t -> Normal (Abs t)
-  Zero : Normal Zero
-  Suc : Normal t -> Normal (Suc t)
+  WrapNf : Normal' t -> Normal (t `Over` thin)
 
 %name Neutral n, m, k
 %name Normal n, m, k
+%name Neutral' n, m, k
+%name Normal' n, m, k
 
 public export
-record NormalForm (0 t : Term ctx ty) where
+record NormalForm (0 t : FullTerm ty ctx) where
   constructor MkNf
-  term : Term ctx ty
-  0 steps : t >= term
+  term : FullTerm ty ctx
+  0 steps : toTerm t >= toTerm term
   0 normal : Normal term
 
 %name NormalForm nf
 
 -- Strong Normalization Proof --------------------------------------------------
 
-invApp : Normal (App t u) -> Neutral (App t u)
+abs : Normal t -> Normal (abs t)
+
+app : Neutral t -> Normal u -> Neutral (app t u)
+
+suc : Normal t -> Normal (suc t)
+
+rec : Neutral t -> Normal u -> Normal v -> Neutral (rec t u v)
+
+invApp : Normal' (App x) -> Neutral' (App x)
 invApp (Ntrl n) = n
 
-invRec : Normal (Rec t u v) -> Neutral (Rec t u v)
+invRec : Normal' (Rec x) -> Neutral' (Rec x)
 invRec (Ntrl n) = n
 
-invSuc : Normal (Suc t) -> Normal t
+invSuc : Normal' (Suc t) -> Normal' t
 invSuc (Suc n) = n
 
 wknNe : Neutral t -> Neutral (wkn t thin)
+wknNe (WrapNe n) = WrapNe n
+
 wknNf : Normal t -> Normal (wkn t thin)
+wknNf (WrapNf n) = WrapNf n
 
-wknNe Var = Var
-wknNe (App n m) = App (wknNe n) (wknNf m)
-wknNe (Rec n m k) = Rec (wknNe n) (wknNf m) (wknNf k)
-
-wknNf (Ntrl n) = Ntrl (wknNe n)
-wknNf (Abs n) = Abs (wknNf n)
-wknNf Zero = Zero
-wknNf (Suc n) = Suc (wknNf n)
-
-backStepsNf : NormalForm t -> (0 _ : u >= t) -> NormalForm u
+backStepsNf : NormalForm t -> (0 _ : toTerm u >= toTerm t) -> NormalForm u
 backStepsNf nf steps = MkNf nf.term (steps ++ nf.steps) nf.normal
 
 backStepsRel :
   {ty : Ty} ->
-  {0 t, u : Term ctx ty} ->
+  {0 t, u : FullTerm ty ctx} ->
   LogRel (\t => NormalForm t) t ->
-  (0 _ : u >= t) ->
+  (0 _ : toTerm u >= toTerm t) ->
   LogRel (\t => NormalForm t) u
 backStepsRel =
-  preserve {R = flip (>=)}
-    (MkPresHelper (\thin, v, steps => AppCong1' (wknSteps steps)) backStepsNf)
+  preserve {R = flip (>=) `on` toTerm}
+    (MkPresHelper
+      (\t, u, thin, v, steps =>
+        ?appCong1Steps)
+      backStepsNf)
 
-ntrlRel : {ty : Ty} -> {t : Term ctx ty} -> (0 _ : Neutral t) -> LogRel (\t => NormalForm t) t
-ntrlRel {ty = N} n = MkNf t [<] (Ntrl n)
-ntrlRel {ty = ty ~> ty'} n =
-  ( MkNf t [<] (Ntrl n)
+ntrlRel : {ty : Ty} -> {t : FullTerm ty ctx} -> (0 _ : Neutral t) -> LogRel (\t => NormalForm t) t
+ntrlRel {ty = N} (WrapNe n) = MkNf t [<] (WrapNf (Ntrl n))
+ntrlRel {ty = ty ~> ty'} (WrapNe {thin = thin'} n) =
+  ( MkNf t [<] (WrapNf (Ntrl n))
   , \thin, u, rel =>
     backStepsRel
-      (ntrlRel (App (wknNe n) (escape rel).normal))
-      (AppCong2' (escape rel).steps)
+      (ntrlRel (app (wknNe {thin} (WrapNe {thin = thin'} n)) (escape rel).normal))
+      ?appCong2Steps
   )
+
+recNf'' :
+  {ctx : SnocList Ty} ->
+  {ty : Ty} ->
+  {u : FullTerm ty ctx} ->
+  {v : FullTerm (ty ~> ty) ctx} ->
+  (t : CoTerm N ctx') ->
+  (thin : ctx' `Thins` ctx) ->
+  (0 n : Normal' t) ->
+  LogRel (\t => NormalForm t) u ->
+  LogRel (\t => NormalForm t) v ->
+  LogRel (\t => NormalForm t) (rec (t `Over` thin) u v)
+recNf'' Zero thin n relU relV =
+  backStepsRel relU [<?recZero]
+recNf'' (Suc t) thin n relU relV =
+  let rec = recNf'' t thin (invSuc n) relU relV in
+  backStepsRel (snd relV id _ rec) [<?recSuc]
+recNf'' t@Var thin n relU relV =
+  let 0 neT = WrapNe {thin} Var in
+  let nfU = escape relU in
+  let nfV = escape {ty = ty ~> ty} relV in
+  backStepsRel
+    (ntrlRel (rec neT nfU.normal nfV.normal))
+    ?stepsUandV
+recNf'' t@(App _) thin n relU relV =
+  let 0 neT = WrapNe {thin} (invApp n) in
+  let nfU = escape relU in
+  let nfV = escape {ty = ty ~> ty} relV in
+  backStepsRel
+    (ntrlRel (rec neT nfU.normal nfV.normal))
+    ?stepsUandV'
+recNf'' t@(Rec _) thin n relU relV =
+  let 0 neT = WrapNe {thin} (invRec n) in
+  let nfU = escape relU in
+  let nfV = escape {ty = ty ~> ty} relV in
+  backStepsRel
+    (ntrlRel (rec neT nfU.normal nfV.normal))
+    ?stepsUandV''
 
 recNf' :
   {ctx : SnocList Ty} ->
   {ty : Ty} ->
-  {u : Term ctx ty} ->
-  {v : Term ctx (ty ~> ty)} ->
-  (t' : Term ctx N) ->
-  (0 n : Normal t') ->
+  {u : FullTerm ty ctx} ->
+  {v : FullTerm (ty ~> ty) ctx} ->
+  (t : FullTerm N ctx) ->
+  (0 n : Normal t) ->
   LogRel (\t => NormalForm t) u ->
   LogRel (\t => NormalForm t) v ->
-  LogRel (\t => NormalForm t) (Rec t' u v)
-recNf' Zero n relU relV = backStepsRel relU [<RecZero]
-recNf' (Suc t') n relU relV =
-  let rec = recNf' t' (invSuc n) relU relV in
-  let step : Rec (Suc t') u v > App (wkn v id) (Rec t' u v) = rewrite wknId v in RecSuc in
-  backStepsRel (snd relV id _ rec) [<step]
-recNf' t'@(Var _) n relU relV =
-  let nfU = escape relU in
-  let nfV = escape {ty = ty ~> ty} relV in
-  backStepsRel
-    (ntrlRel (Rec Var nfU.normal nfV.normal))
-    (RecCong2' nfU.steps ++ RecCong3' nfV.steps)
-recNf' t'@(App _ _) n relU relV =
-  let nfU = escape relU in
-  let nfV = escape {ty = ty ~> ty} relV in
-  backStepsRel
-    (ntrlRel (Rec (invApp n) nfU.normal nfV.normal))
-    (RecCong2' nfU.steps ++ RecCong3' nfV.steps)
-recNf' t'@(Rec _ _ _) n relU relV =
-  let nfU = escape relU in
-  let nfV = escape {ty = ty ~> ty} relV in
-  backStepsRel
-    (ntrlRel (Rec (invRec n) nfU.normal nfV.normal))
-    (RecCong2' nfU.steps ++ RecCong3' nfV.steps)
+  LogRel (\t => NormalForm t) (rec t u v)
+recNf' (t `Over` thin) (WrapNf n) = recNf'' t thin n
 
 recNf :
   {ctx : SnocList Ty} ->
   {ty : Ty} ->
-  {0 t : Term ctx N} ->
-  {u : Term ctx ty} ->
-  {v : Term ctx (ty ~> ty)} ->
+  {0 t : FullTerm N ctx} ->
+  {u : FullTerm ty ctx} ->
+  {v : FullTerm (ty ~> ty) ctx} ->
   NormalForm t ->
   LogRel (\t => NormalForm t) u ->
   LogRel (\t => NormalForm t) v ->
-  LogRel (\t => NormalForm t) (Rec t u v)
+  LogRel (\t => NormalForm t) (rec t u v)
 recNf nf relU relV =
   backStepsRel
     (recNf' nf.term nf.normal relU relV)
-    (RecCong1' nf.steps)
+    ?recCong1Steps
 
 helper : ValidHelper (\t => NormalForm t)
 helper = MkValidHelper
-  { var = \i => ntrlRel Var
-  , abs = \rel => let nf = escape rel in MkNf (Abs nf.term) (AbsCong' nf.steps) (Abs nf.normal)
-  , zero = MkNf Zero [<] Zero
-  , suc = \nf => MkNf (Suc nf.term) (SucCong' nf.steps) (Suc nf.normal)
+  { var = \i => ntrlRel (WrapNe Var)
+  , abs = \rel =>
+    let nf = escape rel in
+    MkNf (abs nf.term) ?absCongSteps (abs nf.normal)
+  , zero = MkNf zero [<] (WrapNf Zero)
+  , suc = \nf => MkNf (suc nf.term) ?sucCongSteps (suc nf.normal)
   , rec = recNf
   , step = \nf, step => backStepsNf nf [<step]
-  , wkn = \nf, thin => MkNf (wkn nf.term thin) (wknSteps nf.steps) (wknNf nf.normal)
+  , wkn = \nf, thin => MkNf (wkn nf.term thin) ?wknSteps (wknNf nf.normal)
   }
 
 export
-normalize : {ctx : SnocList Ty} -> {ty : Ty} -> (t : Term ctx ty) -> NormalForm t
+normalize : {ctx : SnocList Ty} -> {ty : Ty} -> (t : FullTerm ty ctx) -> NormalForm t
 normalize = allRel helper

@@ -1,5 +1,6 @@
 module Thinning
 
+import Data.Singleton
 import Data.SnocList.Elem
 
 %prefix_record_projections off
@@ -38,7 +39,7 @@ lenAppend k Z = k
 lenAppend k (S m) = S (lenAppend k m)
 
 %hint
-export
+public export
 lenPred : Len (sx :< x) -> Len sx
 lenPred (S k) = k
 
@@ -59,7 +60,7 @@ id : (len : Len sx) => sx `Thins` sx
 id {len = Z} = Empty
 id {len = S k} = Keep id
 
-export
+public export
 point : Len sx => Elem ty sx -> [<ty] `Thins` sx
 point Here = Keep empty
 point (There i) = Drop (point i)
@@ -104,6 +105,7 @@ namespace Covering
     KeepDrop : Covering ov thin1 thin2 -> Covering ov (Keep thin1) (Drop thin2)
     KeepKeep : Covering Covers thin1 thin2 -> Covering Covers (Keep thin1) (Keep thin2)
 
+public export
 record Coproduct {sx, sy, sz : SnocList a} (thin1 : sx `Thins` sz) (thin2 : sy `Thins` sz) where
   constructor MkCoprod
   {0 sw : SnocList a}
@@ -114,6 +116,7 @@ record Coproduct {sx, sy, sz : SnocList a} (thin1 : sx `Thins` sz) (thin2 : sy `
   0 right : Triangle thin thin2' thin2
   0 cover : Covering Covers thin1' thin2'
 
+export
 coprod : (thin1 : sx `Thins` sz) -> (thin2 : sy `Thins` sz) -> Coproduct thin1 thin2
 coprod Empty Empty = MkCoprod EmptyAny EmptyAny EmptyEmpty
 coprod (Drop thin1) (Drop thin2) =
@@ -127,12 +130,14 @@ coprod (Keep thin1) (Keep thin2) =
 
 -- Splitting off Contexts ------------------------------------------------------
 
+public export
 data Split : (global, local : SnocList a) -> (thin : sx `Thins` global ++ local) -> Type where
   MkSplit :
     (thin2 : sx `Thins` global) ->
     (thin1 : used `Thins` local) ->
     Split global local (thin2 ++ thin1)
 
+public export
 split : Len local -> (thin : sx `Thins` global ++ local) -> Split global local thin
 split Z thin = MkSplit thin Empty
 split (S k) (Drop thin) with (split k thin)
@@ -160,7 +165,7 @@ public export
 Pair : (T, U : SnocList a -> Type) -> SnocList a -> Type
 Pair = OverlapPair Covers
 
-export
+public export
 MkPair : Thinned t sx -> Thinned u sx -> Thinned (OverlapPair Covers t u) sx
 MkPair (t `Over` thin1) (u `Over` thin2) =
   let cp = coprod thin1 thin2 in
@@ -173,19 +178,23 @@ record Binds (local : SnocList a) (T : SnocList a -> Type) (sx : SnocList a) whe
   value : T (sx ++ used)
   thin : used `Thins` local
 
-export
+public export
 MkBound : Len local -> Thinned t (sx ++ local) -> Thinned (Binds local t) sx
 MkBound k (value `Over` thin) with (split k thin)
   MkBound k (value `Over` .(thin2 ++ thin1)) | MkSplit thin2 thin1 =
     MakeBound value thin1 `Over` thin2
 
-export
+public export
 map : (forall ctx. t ctx -> u ctx) -> Thinned t ctx -> Thinned u ctx
 map f (value `Over` thin) = f value `Over` thin
 
-export
-drop : Thinned t ctx -> Thinned t (ctx :< ty)
+public export
+drop : Thinned t sx -> Thinned t (sx :< x)
 drop (value `Over` thin) = value `Over` Drop thin
+
+public export
+wkn : Thinned t sx -> sx `Thins` sy -> Thinned t sy
+wkn (value `Over` thin) thin' = value `Over` thin' . thin
 
 -- Properties ------------------------------------------------------------------
 
@@ -193,6 +202,11 @@ export
 lenUnique : (k, m : Len sx) -> k = m
 lenUnique Z Z = Refl
 lenUnique (S k) (S m) = cong S (lenUnique k m)
+
+export
+emptyUnique : (thin1, thin2 : [<] `Thins` sx) -> thin1 = thin2
+emptyUnique Empty Empty = Refl
+emptyUnique (Drop thin1) (Drop thin2) = cong Drop (emptyUnique thin1 thin2)
 
 export
 identityLeft : (len : Len sy) => (thin : sx `Thins` sy) -> id @{len} . thin = thin
@@ -239,3 +253,64 @@ indexHomo (Drop thin2) thin1 i = cong There (indexHomo thin2 thin1 i)
 indexHomo (Keep thin2) (Drop thin1) i = cong There (indexHomo thin2 thin1 i)
 indexHomo (Keep thin2) (Keep thin1) Here = Refl
 indexHomo (Keep thin2) (Keep thin1) (There i) = cong There (indexHomo thin2 thin1 i)
+
+-- Objects
+
+export
+indexPoint : (len : Len sx) => (i : Elem x sx) -> index (point @{len} i) Here = i
+indexPoint Here = Refl
+indexPoint (There i) = cong There (indexPoint i)
+
+export
+MkTriangle :
+  (thin2 : sy `Thins` sz) ->
+  (thin1 : sx `Thins` sy) ->
+  Triangle thin2 thin1 (thin2 . thin1)
+MkTriangle Empty thin1 = EmptyAny
+MkTriangle (Drop thin2) thin1 = DropAny (MkTriangle thin2 thin1)
+MkTriangle (Keep thin2) (Drop thin1) = KeepDrop (MkTriangle thin2 thin1)
+MkTriangle (Keep thin2) (Keep thin1) = KeepKeep (MkTriangle thin2 thin1)
+
+export
+triangleCorrect : Triangle thin2 thin1 thin -> thin2 . thin1 = thin
+triangleCorrect EmptyAny = Refl
+triangleCorrect (DropAny t) = cong Drop (triangleCorrect t)
+triangleCorrect (KeepDrop t) = cong Drop (triangleCorrect t)
+triangleCorrect (KeepKeep t) = cong Keep (triangleCorrect t)
+
+export
+coprodEta :
+  {thin1 : sx `Thins` sz} ->
+  {thin2 : sy `Thins` sz} ->
+  (thin : sz `Thins` sw) ->
+  (cover : Covering Covers thin1 thin2) ->
+  coprod (thin . thin1) (thin . thin2) =
+  MkCoprod (MkTriangle thin thin1) (MkTriangle thin thin2) cover
+coprodEta Empty EmptyEmpty = Refl
+coprodEta (Drop thin) cover = rewrite coprodEta thin cover in Refl
+coprodEta (Keep thin) (DropKeep cover) = rewrite coprodEta thin cover in Refl
+coprodEta (Keep thin) (KeepDrop cover) = rewrite coprodEta thin cover in Refl
+coprodEta (Keep thin) (KeepKeep cover) = rewrite coprodEta thin cover in Refl
+
+export
+dropIsWkn : (len : Len sx) => (v : Thinned t sx) -> drop {x} v = wkn v (Drop $ id @{len})
+dropIsWkn (value `Over` thin) = sym $ cong ((value `Over`) . Drop) $ identityLeft thin
+
+export
+wknId : (len : Len sx) => (v : Thinned t sx) -> wkn v (id @{len}) = v
+wknId (value `Over` thin) = cong (value `Over`) $ identityLeft thin
+
+export
+wknHomo :
+  (v : Thinned t sx) ->
+  (thin2 : sy `Thins` sz) ->
+  (thin1 : sx `Thins` sy) ->
+  wkn (wkn v thin1) thin2 = wkn v (thin2 . thin1)
+wknHomo (value `Over` thin) thin2 thin1 = cong (value `Over`) $ assoc thin2 thin1 thin
+
+%hint
+export
+retractSingleton : Singleton sy -> sx `Thins` sy -> Singleton sx
+retractSingleton s Empty = s
+retractSingleton (Val (sy :< z)) (Drop thin) = retractSingleton (Val sy) thin
+retractSingleton (Val (sy :< z)) (Keep thin) = pure (:< z) <*> retractSingleton (Val sy) thin
