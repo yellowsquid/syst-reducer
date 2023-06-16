@@ -1,6 +1,6 @@
 module Type
 
-infix 4 ~>
+infixr 4 ~>
 
 public export
 data Ty : Type where

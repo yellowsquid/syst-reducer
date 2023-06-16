@@ -7,4 +7,12 @@ options = "--total"
 depends = contrib
 
 modules
-  = Thinning
+  = Encoded.Bool
+  , Encoded.Pair
+  , Encoded.Union
+  , Term
+  , Term.Semantics
+  , Term.Syntax
+  , Thinned
+  , Thinning
+  , Type

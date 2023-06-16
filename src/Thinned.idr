@@ -136,5 +136,3 @@ mkPairCong :
   v1 <~> w1 ->
   v2 <~> w2 ->
   MkPair v1 v2 <~> MkPair w1 w2
-mkPairCong (UpToThin prf1) (UpToThin prf2) =
-  ?mkPairCong_rhs_1

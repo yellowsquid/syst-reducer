@@ -74,12 +74,15 @@ namespace Smart
 
   export
   varCong : {0 i, j : Elem ty ctx} -> i = j -> Var i <~> Var j
+  varCong Refl = irrelevantEquiv reflexive
 
   export
   shiftVar : (i : Elem ty ctx) -> shift (Var i) <~> Var (There i)
+  shiftVar i = UpToThin (dropPoint i)
 
   export
   constCong : {0 t, u : Term ty' ctx} -> t <~> u -> Const t <~> Const u
+  constCong prf = mapCong Const prf
 
   export
   absCong : {0 t, u : Term ty' (ctx :< ty)} -> t <~> u -> Abs t <~> Abs u
@@ -94,6 +97,7 @@ namespace Smart
 
   export
   sucCong : {0 t, u : Term N ctx} -> t <~> u -> Suc t <~> Suc u
+  sucCong prf = mapCong Suc prf
 
   export
   recCong :
@@ -104,9 +108,6 @@ namespace Smart
     t2 <~> u2 ->
     t3 <~> u3 ->
     Rec t1 t2 t3 <~> Rec u1 u2 u3
-  recCong prf1 prf2 prf3 =
-    mapCong Rec
-      ?recCong_rhs_1
 
 -- Substitution Definition -----------------------------------------------------
 
@@ -333,9 +334,9 @@ substBase :
   (thin : ctx `Thins` ctx') ->
   subst t (Base thin) <~> wkn t thin
 
-export
-substHomo :
-  (t : Term ty ctx) ->
-  (sub1 : Subst ctx ctx') ->
-  (sub2 : Subst ctx' ctx'') ->
-  subst (subst t sub1) sub2 <~> subst t ?d
+-- export
+-- substHomo :
+--   (t : Term ty ctx) ->
+--   (sub1 : Subst ctx ctx') ->
+--   (sub2 : Subst ctx' ctx'') ->
+--   subst (subst t sub1) sub2 <~> subst t ?d
