@@ -340,3 +340,46 @@ substBase :
 --   (sub1 : Subst ctx ctx') ->
 --   (sub2 : Subst ctx' ctx'') ->
 --   subst (subst t sub1) sub2 <~> subst t ?d
+
+-- Utilities -------------------------------------------------------------------
+
+export
+countUses : Term ty ctx -> Elem ty' ctx -> Nat
+fullCountUses : FullTerm ty ctx -> Elem ty' ctx -> Nat
+
+countUses (t `Over` thin) i =
+  case preimage thin i of
+    Just i => fullCountUses t i
+    Nothing => 0
+
+fullCountUses Var Here = 1
+fullCountUses (Const t) i = fullCountUses t i
+fullCountUses (Abs t) i = fullCountUses t (There i)
+fullCountUses (App (MakePair t u _)) i = countUses t i + countUses u i
+fullCountUses (Suc t) i = fullCountUses t i
+fullCountUses
+  (Rec (MakePair
+    t
+    (MakePair (u `Over` thin2) (v `Over` thin3) _ `Over` thin)
+    _))
+  i =
+  countUses t i +
+  case preimage thin i of
+    Just i =>
+      (case preimage thin2 i of Just i => fullCountUses u i; Nothing => 0) +
+      (case preimage thin3 i of Just i => fullCountUses v i; Nothing => 0)
+    Nothing => 0
+
+export
+size : Term ty ctx -> Nat
+fullSize : FullTerm ty ctx -> Nat
+
+size (t `Over` thin) = fullSize t
+
+fullSize Var = 1
+fullSize (Const t) = S (fullSize t)
+fullSize (Abs t) = S (fullSize t)
+fullSize (App (MakePair t u _)) = S (size t + size u)
+fullSize Zero = 1
+fullSize (Suc t) = S (fullSize t)
+fullSize (Rec (MakePair t (MakePair u v _ `Over` _) _)) = S (size t + size u + size v)

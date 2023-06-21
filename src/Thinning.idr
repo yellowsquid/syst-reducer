@@ -4,6 +4,7 @@ module Thinning
 import Control.Order
 import Control.Relation
 import Data.Either
+import Data.Maybe
 import Data.Nat
 import Syntax.PreorderReasoning
 
@@ -170,12 +171,10 @@ keepEmptyIsPoint = MkEquivalence (\Here => Refl)
 export
 (.) : sy `Thins` sz -> sx `Thins` sy -> sx `Thins` sz
 Id . thin1 = thin1
-Empty . Id = Empty
-Empty . Empty = Empty
+Empty . thin1 = rewrite thinToEmpty thin1 in Empty
 Drop thin2 . Id = Drop thin2
 Drop thin2 . Empty = Empty
-Drop thin2 . Drop thin1 = Drop (thin2 . Drop thin1)
-Drop thin2 . Keep thin1 = Drop (thin2 . Keep thin1)
+Drop thin2 . thin1 = Drop (thin2 . thin1)
 Keep thin2 . Id = Keep thin2
 Keep thin2 . Empty = Empty
 Keep thin2 . Drop thin1 = Drop (thin2 . thin1)
@@ -397,16 +396,52 @@ coprod (Keep thin1) (Keep thin2) =
     , cover = coverKeepKeep cp.cover
     }
 
--- Coproduct Equivalence -------------------------------------------------------
+-- Preimage --------------------------------------------------------------------
 
-namespace Coproduct
-  public export
-  data (<~>) :
-    {0 thin1 : sx `Thins` sa} ->
-    {0 thin2 : sy `Thins` sa} ->
-    {0 thin3 : sz `Thins` sa} ->
-    {0 thin4 : sw `Thins` sa} ->
-    Coproduct thin1 thin2 ->
-    Coproduct thin3 thin4 ->
-    Type
-    where
+export
+preimage : sx `Thins` sy -> Elem y sy -> Maybe (Elem y sx)
+preimage Id i = Just i
+preimage Empty i = Nothing
+preimage (Drop thin) Here = Nothing
+preimage (Drop thin) (There i) = preimage thin i
+preimage (Keep thin) Here = Just Here
+preimage (Keep thin) (There i) = There <$> preimage thin i
+
+isJustMapInv : {t : Maybe a} -> IsJust (map f t) -> IsJust t
+isJustMapInv {t = Just x} ItIsJust = ItIsJust
+
+isNothingMapInv : {t : Maybe a} -> map f t = Nothing -> t = Nothing
+isNothingMapInv {t = Nothing} Refl = Refl
+
+fromJustMap :
+  (0 f : a -> b) ->
+  (t : Maybe a) ->
+  {auto 0 ok : IsJust (map f t)} ->
+  {auto 0 ok' : IsJust t} ->
+  fromJust (map f t) @{ok} = f (fromJust t @{ok'})
+fromJustMap f (Just x) = Refl
+
+export
+preimageCorrect :
+  (thin : sx `Thins` sy) ->
+  (i : Elem y sy) ->
+  {auto 0 ok : IsJust (preimage thin i)} ->
+  index thin (fromJust (preimage thin i) @{ok}) = i
+preimageCorrect Id i = Refl
+preimageCorrect (Drop thin) (There i) = cong There $ preimageCorrect thin i
+preimageCorrect (Keep thin) Here = Refl
+preimageCorrect (Keep thin) (There i) =
+  rewrite fromJustMap There (preimage thin i) {ok} {ok' = isJustMapInv ok} in
+  cong There $ preimageCorrect thin i @{isJustMapInv ok}
+
+export
+preimageMissing :
+  (thin : sx `Thins` sy) ->
+  (i : Elem y sy) ->
+  {auto 0 ok : preimage thin i = Nothing} ->
+  (j : Elem y sx) ->
+  Not (index thin j = i)
+preimageMissing (Drop thin) (There i) j prf =
+  preimageMissing thin i j (injective prf)
+preimageMissing (Keep thin) (There i) (There j) prf =
+  preimageMissing thin i @{isNothingMapInv ok} j (injective prf)

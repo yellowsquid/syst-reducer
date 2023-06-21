@@ -1,6 +1,8 @@
 module Term.Semantics
 
+import Control.Monad.Identity
 import Term
+
 import public Data.SnocList.Quantifiers
 
 public export
@@ -12,27 +14,55 @@ rec : Nat -> a -> (a -> a) -> a
 rec 0 x f = x
 rec (S k) x f = f (rec k x f)
 
-fullSem : FullTerm ty ctx -> ctx `Thins` ctx' -> All TypeOf ctx' -> TypeOf ty
-fullSem Var thin ctx = indexAll (index thin Here) ctx
-fullSem (Const t) thin ctx = const (fullSem t thin ctx)
-fullSem (Abs t) thin ctx = \v => fullSem t (Keep thin) (ctx :< v)
-fullSem (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) thin ctx =
-  fullSem t (thin . thin1) ctx (fullSem u (thin . thin2) ctx)
-fullSem Zero thin ctx = 0
-fullSem (Suc t) thin ctx = S (fullSem t thin ctx)
-fullSem
-  (Rec (MakePair
-    (t `Over` thin1)
-    (MakePair (u `Over` thin2) (v `Over` thin3) _ `Over` thin')
-    _))
-  thin
-  ctx =
-  let thin' = thin . thin' in
-  rec
-    (fullSem t (thin . thin1) ctx)
-    (fullSem u (thin' . thin2) ctx)
-    (fullSem v (thin' . thin3) ctx)
+%inline
+init : All p (sx :< x) -> All p sx
+init (psx :< px) = psx
+
+%inline
+mapInit : (All p sx -> All p sy) -> All p (sx :< z) -> All p (sy :< z)
+mapInit f (psx :< px) = f psx :< px
+
+restrict : Applicative m => sx `Thins` sy -> m (All p sy -> All p sx)
+restrict Id = pure id
+restrict Empty = pure (const [<])
+restrict (Drop thin) = [| restrict thin . [| init |] |]
+restrict (Keep thin) = [| mapInit (restrict thin) |]
+
+%inline
+indexVar : All p [<x] -> p x
+indexVar [<px] = px
+
+%inline
+sem' : Monad m => Term ty ctx -> m (All TypeOf ctx -> TypeOf ty)
+fullSem' : Monad m => FullTerm ty ctx -> m (All TypeOf ctx -> TypeOf ty)
+
+sem' (t `Over` thin) = [| fullSem' t . restrict thin |]
+
+fullSem' Var = pure indexVar
+fullSem' (Const t) = do
+  t <- fullSem' t
+  pure (const . t)
+fullSem' (Abs t) = do
+  t <- fullSem' t
+  pure (t .: (:<))
+fullSem' (App (MakePair t u _)) = do
+  t <- sem' t
+  u <- sem' u
+  pure (\ctx => t ctx (u ctx))
+fullSem' Zero = pure (const 0)
+fullSem' (Suc t) = do
+  t <- fullSem' t
+  pure (S . t)
+fullSem' (Rec (MakePair t (MakePair u v _ `Over` thin) _)) = do
+  t <- sem' t
+  u <- sem' u
+  v <- sem' v
+  f <- restrict thin
+  pure
+    (\ctx =>
+      let ctx' = f ctx in
+      rec (t ctx) (u ctx') (v ctx'))
 
 export
 sem : Term ty ctx -> All TypeOf ctx -> TypeOf ty
-sem (t `Over` thin) ctx = fullSem t thin ctx
+sem t = runIdentity (sem' t)

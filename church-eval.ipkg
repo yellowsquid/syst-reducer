@@ -7,10 +7,15 @@ options = "--total"
 depends = contrib
 
 modules
-  = Encoded.Bool
+  = Encoded.Arith
+  , Encoded.Bool
+  , Encoded.Fin
   , Encoded.Pair
+  , Encoded.Sum
   , Encoded.Union
+  , Encoded.Vect
   , Term
+  , Term.Pretty
   , Term.Semantics
   , Term.Syntax
   , Thinned

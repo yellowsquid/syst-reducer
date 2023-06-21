@@ -2,11 +2,23 @@ module Encoded.Pair
 
 import Encoded.Bool
 import Encoded.Union
+import Term.Semantics
 import Term.Syntax
 
 export
 (*) : Ty -> Ty -> Ty
 ty1 * ty2 = B ~> (ty1 <+> ty2)
+
+export
+[ShowPair]
+{ty1, ty2 : Ty} ->
+Show (TypeOf ty1) =>
+Show (TypeOf ty2) =>
+Show (TypeOf (ty1 * ty2)) where
+  show f = fastConcat
+    [ "(", show (sem prL [<] (f $ sem True [<]))
+    , ", ", show (sem prR [<] (f $ sem False [<]))
+    , ")"]
 
 export
 pair : {ty1, ty2 : Ty} -> Term (ty1 ~> ty2 ~> (ty1 * ty2)) ctx
@@ -23,3 +35,32 @@ fst = Abs $ App (prL . Var Here) [<True]
 export
 snd : {ty1, ty2 : Ty} -> Term ((ty1 * ty2) ~> ty2) ctx
 snd = Abs $ App (prR . Var Here) [<False]
+
+export
+bimap :
+  {ty1, ty1', ty2, ty2' : Ty} ->
+  Term ((ty1 ~> ty1') ~> (ty2 ~> ty2') ~> ty1 * ty2 ~> ty1' * ty2') ctx
+bimap = Abs $ Abs $ Abs $ Abs $
+  let f = Var (There $ There $ There Here) in
+  let g = Var (There $ There Here) in
+  let x = Var (There $ Here) in
+  let b = Var Here in
+  App if'
+    [<b
+    , App (inL . f . prL . x) [<True]
+    , App (inR . g . prR . x) [<False]
+    ]
+
+export
+mapSnd : {ty1, ty2, ty2' : Ty} -> Term ((ty2 ~> ty2') ~> ty1 * ty2 ~> ty1 * ty2') ctx
+mapSnd = Abs $ Abs $
+  let f = Var (There Here) in
+  let x = Var Here in
+  App pair [<App fst [<x], App (f . snd) [<x]]
+
+export
+uncurry : {ty1, ty2, ty : Ty} -> Term ((ty1 ~> ty2 ~> ty) ~> ty1 * ty2 ~> ty) ctx
+uncurry = Abs $ Abs $
+  let f = Var $ There Here in
+  let p = Var Here in
+  App f [<App fst [<p], App snd [<p]]

@@ -2,6 +2,8 @@ module Encoded.Union
 
 import Term.Syntax
 
+-- Binary Union ----------------------------------------------------------------
+
 export
 (<+>) : Ty -> Ty -> Ty
 N <+> N = N
