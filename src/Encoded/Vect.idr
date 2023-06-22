@@ -6,19 +6,11 @@ import Encoded.Bool
 import Encoded.Pair
 import Encoded.Fin
 
-import Term.Semantics
 import Term.Syntax
 
 export
 Vect : Nat -> Ty -> Ty
 Vect k ty = Fin k ~> ty
-
-export
-[ShowVect]
-{k : Nat} ->
-Show (TypeOf ty) =>
-Show (TypeOf (Vect k ty)) where
-  show f = "[" ++ joinBy ", " (map (show . f) $ allSem k) ++ "]"
 
 export
 nil : {ty : Ty} -> Term (Vect 0 ty) ctx

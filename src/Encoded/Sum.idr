@@ -1,13 +1,10 @@
 module Encoded.Sum
 
-import public Data.List
-import public Data.List.Elem
-import public Data.List.Quantifiers
+import public Data.SnocList.Operations
 
 import Encoded.Bool
 import Encoded.Pair
 import Encoded.Union
-import Term.Semantics
 import Term.Syntax
 
 -- Binary Sums -----------------------------------------------------------------
@@ -15,13 +12,6 @@ import Term.Syntax
 export
 (+) : Ty -> Ty -> Ty
 ty1 + ty2 = B * (ty1 <+> ty2)
-
-export
-{ty1, ty2 : Ty} -> Show (TypeOf ty1) => Show (TypeOf ty2) => Show (TypeOf (ty1 + ty2)) where
-  show p =
-    if toBool (sem fst [<] p)
-    then fastConcat ["Left (", show (sem (prL . snd) [<] p), ")"]
-    else fastConcat ["Right (", show (sem (prR . snd) [<] p), ")"]
 
 export
 left : {ty1, ty2 : Ty} -> Term (ty1 ~> (ty1 + ty2)) ctx
@@ -51,30 +41,36 @@ either = Abs $ Abs $ Abs $
 -- N-ary Sums ------------------------------------------------------------------
 
 public export
-mapNonEmpty : NonEmpty xs -> NonEmpty (map f xs)
-mapNonEmpty IsNonEmpty = IsNonEmpty
+mapNonEmpty : NonEmpty sx -> NonEmpty (map f sx)
+mapNonEmpty IsSnoc = IsSnoc
 
 export
-Sum : (tys : List Ty) -> {auto 0 ok : NonEmpty tys} -> Ty
-Sum = foldr1 (+)
+Sum : (sty : SnocList Ty) -> {auto 0 ok : NonEmpty sty} -> Ty
+Sum [<ty] = ty
+Sum (sty@(_ :< _) :< ty) = Sum sty + ty
 
 export
 any :
-  {tys : List Ty} ->
+  {sty : SnocList Ty} ->
   {ty : Ty} ->
-  {auto 0 ok : NonEmpty tys} ->
-  All (\ty' => Term (ty' ~> ty) ctx) tys ->
-  Term (Sum tys ~> ty) ctx
-any [f] = f
-any (f :: fs@(_ :: _)) = App either [<f, any fs]
+  {auto 0 ok : NonEmpty sty} ->
+  Term (map (~> ty) sty ~>* Sum sty ~> ty) ctx
+any {sty = [<ty']} = Id
+any {sty = sty :< ty'' :< ty'} =
+  Abs (Abs $ Abs $
+    let rec = Var (There $ There Here) in
+    let f = Var (There Here) in
+    let g = Var Here in
+    App either [<App rec [<f], g]) .:
+  any {sty = sty :< ty''}
 
 export
 tag :
-  {tys : List Ty} ->
+  {sty : SnocList Ty} ->
   {ty : Ty} ->
-  {auto 0 ok : NonEmpty tys} ->
-  Elem ty tys ->
-  Term (ty ~> Sum tys) ctx
-tag {tys = [_]} Here = Id
-tag {tys = _ :: _ :: _} Here = left
-tag {tys = _ :: _ :: _} (There i) = right . tag i
+  {auto 0 ok : NonEmpty sty} ->
+  Elem ty sty ->
+  Term (ty ~> Sum sty) ctx
+tag {sty = [<ty]} Here = Id
+tag {sty = sty :< ty' :< ty} Here = right
+tag {sty = sty :< ty'' :< ty'} (There i) = left . tag i

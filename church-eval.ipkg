@@ -9,6 +9,7 @@ depends = contrib
 modules
   = Encoded.Arith
   , Encoded.Bool
+  , Encoded.Container
   , Encoded.Fin
   , Encoded.Pair
   , Encoded.Sum

@@ -23,7 +23,7 @@ Lit (S k) = Suc (Lit k)
 
 -- HOAS
 
-infix 4 ~>*
+infixr 4 ~>*
 
 public export
 (~>*) : SnocList Ty -> Ty -> Ty
@@ -39,8 +39,26 @@ App t [<] = t
 App t (us :< u) = App (App t us) u
 
 export
+AbsAll :
+  (sty : SnocList Ty) ->
+  (All (flip Term (ctx ++ sty)) sty -> Term ty (ctx ++ sty)) ->
+  Term (sty ~>* ty) ctx
+AbsAll [<] f = f [<]
+AbsAll (sty :< ty') f = AbsAll sty (\vars => Abs' (\x => f (mapProperty shift vars :< x)))
+
+export
 (.) : {ty, ty' : Ty} -> Term (ty' ~> ty'') ctx -> Term (ty ~> ty') ctx -> Term (ty ~> ty'') ctx
 t . u = Abs (App (shift t) [<App (shift u) [<Var Here]])
+
+export
+(.:) :
+  {sty : SnocList Ty} ->
+  {ty : Ty} ->
+  Term (ty ~> ty') ctx ->
+  Term (sty ~>* ty) ctx ->
+  Term (sty ~>* ty') ctx
+(t .: u) {sty = [<]} = App t u
+(t .: u) {sty = sty :< ty''} = Abs' (\f => shift t . f) .: u
 
 -- Incomplete Evaluation
 
@@ -112,6 +130,8 @@ Rec' Zero thin u v = Just u
 Rec' (Suc t) thin u v =
   let rec = maybe (Rec (t `Over` thin) u v) id (Rec' t thin u v) in
   Just $ maybe (App v rec) id $ (App' 1 v rec)
+Rec' t thin (Zero `Over` thin1) (Const Zero `Over` thin2) =
+  Just (Zero `Over` Empty)
 Rec' t thin u v = Nothing
 
 eval' : {ty : Ty} -> (fuel : Nat) -> (ratio : Double) -> Term ty ctx -> (Nat, Term ty ctx)

@@ -32,10 +32,15 @@ pred = Abs'
   (\n => App
     (Rec n
       (Const Zero)
-      (Abs' (\f =>
-        Rec (App f [<Zero])
-          (Abs' (\k => Rec k (Suc Zero) (Const Zero)))
-          (Const $ Abs' (\k => Rec k (Suc Zero) (Abs' Suc . shift f))))))
+      (Abs $ Abs $
+        let f = Var (There Here) in
+        let k = Var Here in
+        Rec k
+          (Lit 1)
+          (Const $
+            Rec (App f [<Zero])
+              Zero
+              (Const $ Suc $ App f [<Lit 1]))))
     [<Lit 1])
 
 export
@@ -76,6 +81,6 @@ divmod = Abs $ Abs $
     (App pair [<Zero, Zero])
     (Abs' (\p =>
       App if'
-        [<App lte [<shift d, App snd [<p]]
+        [<App lte [<shift d, Suc (App snd [<p])]
         , App pair [<Suc (App fst [<p]), Zero]
         , App mapSnd [<Abs' Suc, p]]))

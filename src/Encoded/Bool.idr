@@ -1,20 +1,10 @@
 module Encoded.Bool
 
-import Term.Semantics
 import Term.Syntax
 
 export
 B : Ty
 B = N
-
-export
-Show (TypeOf B) where
-  show 0 = "true"
-  show (S k) = "false"
-
-export
-toBool : TypeOf B -> Bool
-toBool = (== 0)
 
 export
 True : Term B ctx

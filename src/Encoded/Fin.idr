@@ -5,7 +5,6 @@ import public Data.Nat
 import Data.Stream
 import Encoded.Arith
 import Encoded.Pair
-import Term.Semantics
 import Term.Syntax
 
 export
@@ -38,10 +37,6 @@ induct = rec
 export
 forget : Term (Fin k ~> N) ctx
 forget = Id
-
-export
-allSem : (k : Nat) -> List (TypeOf (Fin k))
-allSem k = take k nats
 
 export
 divmod' : (k : Nat) -> {auto 0 ok : NonZero k} -> Term (N ~> N * Fin k) ctx

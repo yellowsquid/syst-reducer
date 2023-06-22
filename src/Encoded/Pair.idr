@@ -2,23 +2,11 @@ module Encoded.Pair
 
 import Encoded.Bool
 import Encoded.Union
-import Term.Semantics
 import Term.Syntax
 
 export
 (*) : Ty -> Ty -> Ty
 ty1 * ty2 = B ~> (ty1 <+> ty2)
-
-export
-[ShowPair]
-{ty1, ty2 : Ty} ->
-Show (TypeOf ty1) =>
-Show (TypeOf ty2) =>
-Show (TypeOf (ty1 * ty2)) where
-  show f = fastConcat
-    [ "(", show (sem prL [<] (f $ sem True [<]))
-    , ", ", show (sem prR [<] (f $ sem False [<]))
-    , ")"]
 
 export
 pair : {ty1, ty2 : Ty} -> Term (ty1 ~> ty2 ~> (ty1 * ty2)) ctx

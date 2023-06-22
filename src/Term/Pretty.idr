@@ -51,6 +51,10 @@ interface Renderable (0 a : Type) where
   fromSyntax : Syntax -> a
 
 export
+Renderable () where
+  fromSyntax _ = ()
+
+export
 Renderable AnsiStyle where
   fromSyntax Bound = italic
   fromSyntax Keyword  = color Blue
@@ -150,7 +154,6 @@ parameters (names : Stream String)
   prettyFullTerm : (len : Len ctx) => Prec -> FullTerm ty ctx' -> ctx' `Thins` ctx -> Doc Syntax
   prettyBinding : (len : Len ctx) => Prec -> Binding ty ctx' -> ctx' `Thins` ctx -> Doc Syntax
   prettySpline : (len : Len ctx) => Prec -> Spline ty ctx -> Doc Syntax
-  prettyArg : (len : Len ctx) => Term ty ctx' -> Doc Syntax
 
   prettyTerm' d (t `Over` thin) = prettyFullTerm d t thin
 
@@ -239,7 +242,7 @@ name k =
 
 export
 canonicalNames : Stream String
-canonicalNames = map (fastPack . name) nats
+canonicalNames = map (fastPack . reverse . name) nats
 
 export
 prettyTerm : Renderable ann => (len : Len ctx) => Term ty ctx -> Doc ann
