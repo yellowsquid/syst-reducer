@@ -16,6 +16,7 @@ modules
   , Encoded.Union
   , Encoded.Vect
   , Term
+  , Term.Compile
   , Term.Pretty
   , Term.Semantics
   , Term.Syntax
