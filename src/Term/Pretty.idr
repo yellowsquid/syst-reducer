@@ -120,7 +120,7 @@ getSpline (App (MakePair (t `Over` thin) u _)) =
 getSpline t = MkSpline (t `Over` Id) [<]
 
 getSucs : FullTerm ty ctx -> (Nat, Maybe (FullTerm ty ctx))
-getSucs Zero = (0, Nothing)
+getSucs (Lit n) = (n, Nothing)
 getSucs (Suc t) = mapFst S (getSucs t)
 getSucs t = (0, Just t)
 
@@ -165,7 +165,7 @@ parameters (names : Stream String)
     prettyBinding d (assert_smaller t $ getBinding t $ isBoundRefl t) thin
   prettyFullTerm d t@(App _) thin =
     prettySpline d (assert_smaller t $ wkn (getSpline t) thin)
-  prettyFullTerm d Zero thin = lit 0
+  prettyFullTerm d (Lit n) thin = lit n
   prettyFullTerm d (Suc t) thin =
     let (n, t') = getSucs t in
     case t' of

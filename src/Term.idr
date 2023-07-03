@@ -23,7 +23,7 @@ data FullTerm : Ty -> SnocList Ty -> Type where
     {ty : Ty} ->
     Pair (FullTerm (ty ~> ty')) (FullTerm ty) ctx ->
     FullTerm ty' ctx
-  Zero : FullTerm N [<]
+  Lit : Nat -> FullTerm N [<]
   Suc : FullTerm N ctx -> FullTerm N ctx
   Rec :
     Pair (FullTerm N) (Pair (FullTerm ty) (FullTerm (ty ~> ty))) ctx ->
@@ -59,8 +59,8 @@ namespace Smart
   App t u = map App $ MkPair t u
 
   export
-  Zero : Term N ctx
-  Zero = Zero `Over` Empty
+  Lit : Nat -> Term N ctx
+  Lit n = Lit n `Over` Empty
 
   export
   Suc : Term N ctx -> Term N ctx
@@ -272,7 +272,7 @@ fullSubst (Const t) sub = Const (fullSubst t sub)
 fullSubst (Abs t) sub = Abs (fullSubst t $ lift sub)
 fullSubst (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) sub =
   App (fullSubst t $ sub . thin1) (fullSubst u $ sub . thin2)
-fullSubst Zero sub = Zero
+fullSubst (Lit n) sub = Lit n
 fullSubst (Suc t) sub = Suc (fullSubst t sub)
 fullSubst
   (Rec (MakePair
@@ -305,7 +305,7 @@ fullSubstCong (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) prf =
   appCong
     (fullSubstCong t $ compCong prf reflexive)
     (fullSubstCong u $ compCong prf reflexive)
-fullSubstCong Zero prf = irrelevantEquiv $ reflexive
+fullSubstCong (Lit n) prf = irrelevantEquiv $ reflexive
 fullSubstCong (Suc t) prf = sucCong (fullSubstCong t prf)
 fullSubstCong
   (Rec (MakePair
@@ -380,6 +380,6 @@ fullSize Var = 1
 fullSize (Const t) = S (fullSize t)
 fullSize (Abs t) = S (fullSize t)
 fullSize (App (MakePair t u _)) = S (size t + size u)
-fullSize Zero = 1
+fullSize (Lit n) = 1
 fullSize (Suc t) = S (fullSize t)
 fullSize (Rec (MakePair t (MakePair u v _ `Over` _) _)) = S (size t + size u + size v)

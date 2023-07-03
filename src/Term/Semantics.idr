@@ -49,7 +49,7 @@ fullSem' (App (MakePair t u _)) = do
   t <- sem' t
   u <- sem' u
   pure (\ctx => t ctx (u ctx))
-fullSem' Zero = pure (const 0)
+fullSem' (Lit n) = pure (const n)
 fullSem' (Suc t) = do
   t <- fullSem' t
   pure (S . t)
