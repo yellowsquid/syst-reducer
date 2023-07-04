@@ -40,4 +40,4 @@ forget = Id
 
 export
 divmod' : (k : Nat) -> {auto 0 ok : NonZero k} -> Term (N ~> N * Fin k) ctx
-divmod' k = Abs' (\n => App divmod [<n, Lit k])
+divmod' k = Abs' (\n => App pair [<n `div` Op (Lit k), n `mod` Op (Lit k)])

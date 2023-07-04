@@ -13,6 +13,19 @@ import public Type
 
 -- Definition ------------------------------------------------------------------
 
+public export
+data Operator : List Ty -> Ty -> Type where
+  Lit : (n : Nat) -> Operator [] N
+  Suc : Operator [N] N
+  Plus : Operator [N, N] N
+  Mult : Operator [N, N] N
+  Pred : Operator [N] N
+  Minus : Operator [N, N] N
+  Div : Operator [N, N] N
+  Mod : Operator [N, N] N
+
+%name Operator op
+
 ||| System T terms that use all the variables in scope.
 public export
 data FullTerm : Ty -> SnocList Ty -> Type where
@@ -23,8 +36,7 @@ data FullTerm : Ty -> SnocList Ty -> Type where
     {ty : Ty} ->
     Pair (FullTerm (ty ~> ty')) (FullTerm ty) ctx ->
     FullTerm ty' ctx
-  Lit : Nat -> FullTerm N [<]
-  Suc : FullTerm N ctx -> FullTerm N ctx
+  Op : Operator tys ty -> FullTerm (foldr (~>) ty tys) [<]
   Rec :
     Pair (FullTerm N) (Pair (FullTerm ty) (FullTerm (ty ~> ty))) ctx ->
     FullTerm ty ctx
@@ -59,12 +71,8 @@ namespace Smart
   App t u = map App $ MkPair t u
 
   export
-  Lit : Nat -> Term N ctx
-  Lit n = Lit n `Over` Empty
-
-  export
-  Suc : Term N ctx -> Term N ctx
-  Suc t = map Suc t
+  Op : Operator tys ty -> Term (foldr (~>) ty tys) ctx
+  Op op = Op op `Over` Empty
 
   export
   Rec : Term N ctx -> Term ty ctx -> Term (ty ~> ty) ctx -> Term ty ctx
@@ -94,10 +102,6 @@ namespace Smart
     t1 <~> u1 ->
     t2 <~> u2 ->
     App t1 t2 <~> App u1 u2
-
-  export
-  sucCong : {0 t, u : Term N ctx} -> t <~> u -> Suc t <~> Suc u
-  sucCong prf = mapCong Suc prf
 
   export
   recCong :
@@ -272,8 +276,7 @@ fullSubst (Const t) sub = Const (fullSubst t sub)
 fullSubst (Abs t) sub = Abs (fullSubst t $ lift sub)
 fullSubst (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) sub =
   App (fullSubst t $ sub . thin1) (fullSubst u $ sub . thin2)
-fullSubst (Lit n) sub = Lit n
-fullSubst (Suc t) sub = Suc (fullSubst t sub)
+fullSubst (Op op) sub = Op op
 fullSubst
   (Rec (MakePair
     (t `Over` thin1)
@@ -305,8 +308,7 @@ fullSubstCong (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) prf =
   appCong
     (fullSubstCong t $ compCong prf reflexive)
     (fullSubstCong u $ compCong prf reflexive)
-fullSubstCong (Lit n) prf = irrelevantEquiv $ reflexive
-fullSubstCong (Suc t) prf = sucCong (fullSubstCong t prf)
+fullSubstCong (Op op) prf = irrelevantEquiv $ reflexive
 fullSubstCong
   (Rec (MakePair
     (t `Over` thin1)
@@ -356,7 +358,6 @@ fullCountUses Var Here = 1
 fullCountUses (Const t) i = fullCountUses t i
 fullCountUses (Abs t) i = fullCountUses t (There i)
 fullCountUses (App (MakePair t u _)) i = countUses t i + countUses u i
-fullCountUses (Suc t) i = fullCountUses t i
 fullCountUses
   (Rec (MakePair
     t
@@ -380,6 +381,5 @@ fullSize Var = 1
 fullSize (Const t) = S (fullSize t)
 fullSize (Abs t) = S (fullSize t)
 fullSize (App (MakePair t u _)) = S (size t + size u)
-fullSize (Lit n) = 1
-fullSize (Suc t) = S (fullSize t)
+fullSize (Op op) = 1
 fullSize (Rec (MakePair t (MakePair u v _ `Over` _) _)) = S (size t + size u + size v)

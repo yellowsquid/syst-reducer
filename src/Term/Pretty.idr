@@ -34,9 +34,6 @@ rec_ = keyword "rec"
 underscore : Doc Syntax
 underscore = bound "_"
 
-plus : Doc Syntax
-plus = symbol "+"
-
 arrow : Doc Syntax
 arrow = symbol "=>"
 
@@ -119,11 +116,6 @@ getSpline (App (MakePair (t `Over` thin) u _)) =
   MkSpline rec.head (rec.args :< u)
 getSpline t = MkSpline (t `Over` Id) [<]
 
-getSucs : FullTerm ty ctx -> (Nat, Maybe (FullTerm ty ctx))
-getSucs (Lit n) = (n, Nothing)
-getSucs (Suc t) = mapFst S (getSucs t)
-getSucs t = (0, Just t)
-
 public export
 data Len : SnocList a -> Type where
   Z : Len [<]
@@ -131,6 +123,7 @@ data Len : SnocList a -> Type where
 
 %name Len k
 
+export
 lenToNat : Len sx -> Nat
 lenToNat Z = 0
 lenToNat (S k) = S (lenToNat k)
@@ -149,6 +142,17 @@ extend : sx `Thins` sy -> Len sz -> sx ++ sz `Thins` sy ++ sz
 extend thin Z = thin
 extend thin (S k) = Keep (extend thin k)
 
+public export
+prettyOp : Operator tys ty -> Doc Syntax
+prettyOp (Lit n) = lit n
+prettyOp Suc = keyword "suc"
+prettyOp Plus = keyword "plus"
+prettyOp Mult = keyword "mult"
+prettyOp Pred = keyword "pred"
+prettyOp Minus = keyword "minus"
+prettyOp Div = keyword "div"
+prettyOp Mod = keyword "mod"
+
 parameters (names : Stream String)
   prettyTerm' : (len : Len ctx) => Prec -> Term ty ctx -> Doc Syntax
   prettyFullTerm : (len : Len ctx) => Prec -> FullTerm ty ctx' -> ctx' `Thins` ctx -> Doc Syntax
@@ -165,14 +169,7 @@ parameters (names : Stream String)
     prettyBinding d (assert_smaller t $ getBinding t $ isBoundRefl t) thin
   prettyFullTerm d t@(App _) thin =
     prettySpline d (assert_smaller t $ wkn (getSpline t) thin)
-  prettyFullTerm d (Lit n) thin = lit n
-  prettyFullTerm d (Suc t) thin =
-    let (n, t') = getSucs t in
-    case t' of
-      Just t' =>
-        parenthesise (d >= appPrec) $ group $
-          lit (S n) <++> plus <++> prettyFullTerm leftAppPrec (assert_smaller t t') thin
-      Nothing => lit (S n)
+  prettyFullTerm d (Op op) thin = prettyOp op
   prettyFullTerm d t@(Rec _) thin =
     prettySpline d (assert_smaller t $ wkn (getSpline t) thin)
 

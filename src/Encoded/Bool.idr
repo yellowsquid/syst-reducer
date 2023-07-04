@@ -8,11 +8,11 @@ B = N
 
 export
 True : Term B ctx
-True = Lit 0
+True = 0
   
 export
 False : Term B ctx
-False = Lit 1
+False = 1
 
 export
 if' : Term (B ~> ty ~> ty ~> ty) ctx

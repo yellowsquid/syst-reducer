@@ -1,6 +1,7 @@
 module Term.Semantics
 
 import Control.Monad.Identity
+import Data.Nat
 import Term
 
 import public Data.SnocList.Quantifiers
@@ -33,6 +34,17 @@ indexVar : All p [<x] -> p x
 indexVar [<px] = px
 
 %inline
+opSem : Operator tys ty -> TypeOf (foldr (~>) ty tys)
+opSem (Lit n) = n
+opSem Suc = S
+opSem Plus = (+)
+opSem Mult = (*)
+opSem Pred = pred
+opSem Minus = minus
+opSem Div = div
+opSem Mod = mod
+
+%inline
 sem' : Monad m => Term ty ctx -> m (All TypeOf ctx -> TypeOf ty)
 fullSem' : Monad m => FullTerm ty ctx -> m (All TypeOf ctx -> TypeOf ty)
 
@@ -49,10 +61,7 @@ fullSem' (App (MakePair t u _)) = do
   t <- sem' t
   u <- sem' u
   pure (\ctx => t ctx (u ctx))
-fullSem' (Lit n) = pure (const n)
-fullSem' (Suc t) = do
-  t <- fullSem' t
-  pure (S . t)
+fullSem' (Op op) = pure (const $ opSem op)
 fullSem' (Rec (MakePair t (MakePair u v _ `Over` thin) _)) = do
   t <- sem' t
   u <- sem' u

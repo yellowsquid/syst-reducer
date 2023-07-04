@@ -9,12 +9,13 @@ import Data.Stream
 import Data.String
 
 import Term
+import Term.Pretty
 import Term.Syntax
 
 %prefix_record_projections off
 
 rec_ : Doc ann
-rec_ = "my-rec"
+rec_ = "squid-rec"
 
 underscore : Doc ann
 underscore = "_"
@@ -28,25 +29,15 @@ lambda = "lambda"
 lit : Nat -> Doc ann
 lit = pretty
 
-getSucs : FullTerm ty ctx -> (Nat, Maybe (FullTerm ty ctx))
-getSucs (Lit n) = (n, Nothing)
-getSucs (Suc t) = mapFst S (getSucs t)
-getSucs t = (0, Just t)
-
-public export
-data Len : SnocList a -> Type where
-  Z : Len [<]
-  S : Len sx -> Len (sx :< a)
-
-%name Len k
-
-lenToNat : Len sx -> Nat
-lenToNat Z = 0
-lenToNat (S k) = S (lenToNat k)
-
-extend : sx `Thins` sy -> Len sz -> sx ++ sz `Thins` sy ++ sz
-extend thin Z = thin
-extend thin (S k) = Keep (extend thin k)
+compileOp : Operator tys ty -> Doc ann
+compileOp (Lit n) = lit n
+compileOp Suc = "1+"
+compileOp Plus = "squid-plus"
+compileOp Mult = "squid-mult"
+compileOp Pred = "1-" -- Confusing name, but correct
+compileOp Minus = "squid-minus"
+compileOp Div = "squid-div"
+compileOp Mod = "squid-mod"
 
 parameters (names : Stream String)
   compileFullTerm : (len : Len ctx) => FullTerm ty ctx' -> ctx' `Thins` ctx -> Doc ann
@@ -64,15 +55,7 @@ parameters (names : Stream String)
     parens $ group $ align $
       compileFullTerm t (thin . thin1) <+> line <+>
       compileFullTerm u (thin . thin2)
-  compileFullTerm (Lit n) thin = lit n
-  compileFullTerm t'@(Suc t) thin =
-    let (n, t) = getSucs t in
-    case t of
-      Just t =>
-        parens $ group $ align $
-          plus <++> lit (S n) <+> softline <+>
-          compileFullTerm (assert_smaller t' t) thin
-      Nothing => lit (S n)
+  compileFullTerm (Op op) thin = compileOp op
   compileFullTerm
     (Rec (MakePair
       (t `Over` thin1)
@@ -117,41 +100,43 @@ name k =
     Fraction k 26 0 r prf => [finToChar r]
     Fraction k 26 (S q) r prf => finToChar r :: name (assert_smaller k q)
 
-export
-canonicalNames : Stream String
-canonicalNames = map (fastPack . reverse . name) nats
-
 public export
 data ProfileMode = Run | Profile
 
-builtin_rec : String
-builtin_rec = """
-  (define (my-rec n z s)
+builtins : String
+builtins = """
+  (define (squid-rec n z s)
     (let loop ((k 0) (acc z))
       (if (= k n)
         acc
         (loop (1+ k) (s acc)))))
+
+  (define (squid-plus m) (lambda (n) (+ m n)))
+  (define (squid-mult m) (lambda (n) (* m n)))
+  (define (squid-minus m) (lambda (n) (- m n)))
+  (define (squid-div m) (lambda (n) (euclidean-quotient m n)))
+  (define (squid-mod m) (lambda (n) (euclidean-remainder m n)))
   """
 
 wrap_main : Len ctx => Term ty ctx -> Doc ann
 wrap_main t =
   parens $ group $ hang 2 $
-    "define (my-main)" <+> line <+>
+    "define (squid-main)" <+> line <+>
       compileFullTerm canonicalNames t.value t.thin
 
 run_main : ProfileMode -> String
 run_main Run = """
-  (display (my-main))
+  (display (squid-main))
   (newline)
   """
 run_main Profile = """
   (use-modules (statprof))
-  (statprof my-main)
+  (statprof squid-main)
   """
 
 export
 compileTerm : Len ctx => ProfileMode -> Term ty ctx -> Doc ann
 compileTerm mode t =
-  pretty builtin_rec <+> hardline <+> hardline <+>
+  pretty builtins <+> hardline <+> hardline <+>
   wrap_main t <+> hardline <+> hardline <+>
   pretty (run_main mode)

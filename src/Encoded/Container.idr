@@ -83,31 +83,28 @@ getFuel :
   {cont : Container} ->
   {c : Case} ->
   Term (semCase c (W cont) ~> N) ctx
-getFuel {c = (tag, k)} = App foldr [<Zero, plus] . App map [<Abs' Suc . fuel] . recurse
+getFuel {c = (tag, k)} = App foldr [<Zero, Op Plus] . App map [<Abs' Suc . fuel] . recurse
 
 -- Updates the base and stride for a single recursive position.
 -- These are multiplexed later.
 stepOffset : {k : Nat} -> Term (Fin k ~> (N ~> N * N) ~> (N ~> N * N)) ctx
-stepOffset = Abs $ Abs $ Abs $
-  let i = Var (There $ There Here) in
-  let f = Var (There Here) in
-  let x = Var Here in
+stepOffset = AbsAll [<_,_,_] (\[<i, f, x] =>
   App bimap
     -- Suc is for the initial tag
-    [<App (plus . forget . suc) [<i] . App mult [<Lit k]
-    , App mult [<Lit k]
+    [<Abs' (\n => Suc $ App forget [<shift i] + Op (Lit k) * n)
+    , Abs' (\n => Op (Lit k) * n)
     , App f [<x]
-    ]
+    ])
 
 -- Calculates all offsets for a new W value.
 getOffset :
   {cont : Container} ->
   {c : Case} ->
   Term (semCase c (W cont) ~> N ~> N * N) ctx
-getOffset {c = (tag, 0)} = Const $ Const $ App pair [<Lit 1, Zero]
+getOffset {c = (tag, 0)} = Const $ Const $ App pair [<1, 0]
 getOffset {c = (tag, k@(S _))} = Abs' (\x =>
-  App cons
-    [<App pair [<Lit 1, Zero]
+  App Container.cons
+    [<App pair [<1, 0]
     , Abs' (\n =>
       let dm = App (divmod' k) [<n] in
       let div = App fst [<dm] in
@@ -154,7 +151,7 @@ intro =
   gtabulate introCase
 
 calcIndex : Term (N * N ~> N ~> N) ctx
-calcIndex = Abs' (\bs => App (plus . fst) [<bs] . App (mult . snd) [<bs])
+calcIndex = AbsAll [<_, _] (\[<bs, n] => App fst [<bs] + App snd [<bs] * n)
 
 fillCase :
   {c : Case} ->
