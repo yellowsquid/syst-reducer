@@ -4,7 +4,6 @@ import public Data.SnocList.Operations
 
 import Encoded.Bool
 import Encoded.Pair
-import Encoded.Union
 import Term.Syntax
 
 -- Binary Sums -----------------------------------------------------------------

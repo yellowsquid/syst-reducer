@@ -1,7 +1,6 @@
 module Encoded.Pair
 
 import Encoded.Bool
-import Encoded.Union
 import Term.Syntax
 
 export

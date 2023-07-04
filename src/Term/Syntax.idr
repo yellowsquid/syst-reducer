@@ -43,8 +43,23 @@ t `mod` u = App (App (Op Mod) t) u
 
 export
 Arb : {ty : Ty} -> Term ty ctx
-Arb {ty = N} = Zero
-Arb {ty = ty ~> ty'} = Const Arb
+Arb = Op (Arb ty)
+
+export
+inL : {ty1, ty2 : Ty} -> Term (ty1 ~> (ty1 <+> ty2)) ctx
+inL = Op (Inl ty1 ty2)
+
+export
+inR : {ty1, ty2 : Ty} -> Term (ty2 ~> (ty1 <+> ty2)) ctx
+inR = Op (Inr ty1 ty2)
+
+export
+prL : {ty1, ty2 : Ty} -> Term ((ty1 <+> ty2) ~> ty1) ctx
+prL = Op (Prl ty1 ty2)
+
+export
+prR : {ty1, ty2 : Ty} -> Term ((ty1 <+> ty2) ~> ty2) ctx
+prR = Op (Prr ty1 ty2)
 
 -- HOAS
 

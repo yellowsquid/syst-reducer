@@ -14,8 +14,14 @@ import Term.Syntax
 
 %prefix_record_projections off
 
+const_ : Doc ann
+const_ = "const"
+
 rec_ : Doc ann
 rec_ = "squid-rec"
+
+identity_ : Doc ann
+identity_ = "squid-identity"
 
 underscore : Doc ann
 underscore = "_"
@@ -29,6 +35,10 @@ lambda = "lambda"
 lit : Nat -> Doc ann
 lit = pretty
 
+compileArb : Ty -> Doc ann
+compileArb N = pretty 0
+compileArb (ty ~> ty') = parens $ group $ "const" <+> softline <+> compileArb ty'
+
 compileOp : Operator tys ty -> Doc ann
 compileOp (Lit n) = lit n
 compileOp Suc = "1+"
@@ -38,6 +48,11 @@ compileOp Pred = "1-" -- Confusing name, but correct
 compileOp Minus = "squid-minus"
 compileOp Div = "squid-div"
 compileOp Mod = "squid-mod"
+compileOp (Inl _ _) = identity_
+compileOp (Inr _ _) = identity_
+compileOp (Prl _ _) = identity_
+compileOp (Prr _ _) = identity_
+compileOp (Arb ty) = compileArb ty
 
 parameters (names : Stream String)
   compileFullTerm : (len : Len ctx) => FullTerm ty ctx' -> ctx' `Thins` ctx -> Doc ann
@@ -45,12 +60,17 @@ parameters (names : Stream String)
     pretty $ index (minus (lenToNat len) (S $ elemToNat $ index thin Here)) names
   compileFullTerm (Const t) thin =
     parens $ group $ hang 2 $
-      lambda <++> (parens $ underscore) <+> line <+>
+      const_ <+> line <+>
       compileFullTerm t thin
+  -- compileFullTerm (Abs Var) thin = identity_
   compileFullTerm (Abs t) thin =
     parens $ group $ hang 2 $
       lambda <++> (parens $ pretty $ index (lenToNat len) names) <+> line <+>
       compileFullTerm t (Keep thin)
+  -- compileFullTerm (App (MakePair (Const t `Over` thin1) (u `Over` thin2) _)) thin =
+  --   compileFullTerm t (thin . thin1)
+  -- compileFullTerm (App (MakePair (Abs Var `Over` thin1) (u `Over` thin2) _)) thin =
+  --   compileFullTerm u (thin . thin2)
   compileFullTerm (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) thin =
     parens $ group $ align $
       compileFullTerm t (thin . thin1) <+> line <+>
@@ -105,6 +125,10 @@ data ProfileMode = Run | Profile
 
 builtins : String
 builtins = """
+  (define-module (squid-module)
+    #:use-module (statprof)
+    #:declarative? #t)
+
   (define (squid-rec n z s)
     (let loop ((k 0) (acc z))
       (if (= k n)
@@ -116,6 +140,7 @@ builtins = """
   (define (squid-minus m) (lambda (n) (- m n)))
   (define (squid-div m) (lambda (n) (euclidean-quotient m n)))
   (define (squid-mod m) (lambda (n) (euclidean-remainder m n)))
+  (define (squid-identity x) x)
   """
 
 wrap_main : Len ctx => Term ty ctx -> Doc ann
@@ -130,7 +155,6 @@ run_main Run = """
   (newline)
   """
 run_main Profile = """
-  (use-modules (statprof))
   (statprof squid-main)
   """
 

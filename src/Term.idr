@@ -23,6 +23,11 @@ data Operator : List Ty -> Ty -> Type where
   Minus : Operator [N, N] N
   Div : Operator [N, N] N
   Mod : Operator [N, N] N
+  Inl : (ty, ty' : Ty) -> Operator [ty] (ty <+> ty')
+  Inr : (ty, ty' : Ty) -> Operator [ty'] (ty <+> ty')
+  Prl : (ty, ty' : Ty) -> Operator [ty <+> ty'] ty
+  Prr : (ty, ty' : Ty) -> Operator [ty <+> ty'] ty'
+  Arb : (ty : Ty) -> Operator [] ty
 
 %name Operator op
 

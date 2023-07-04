@@ -13,7 +13,6 @@ modules
   , Encoded.Fin
   , Encoded.Pair
   , Encoded.Sum
-  , Encoded.Union
   , Encoded.Vect
   , Term
   , Term.Compile
