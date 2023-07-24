@@ -15,7 +15,7 @@ import Term.Syntax
 %prefix_record_projections off
 
 const_ : Doc ann
-const_ = "const"
+const_ = "squid-const"
 
 rec_ : Doc ann
 rec_ = "squid-rec"
@@ -62,15 +62,15 @@ parameters (names : Stream String)
     parens $ group $ hang 2 $
       const_ <+> line <+>
       compileFullTerm t thin
-  -- compileFullTerm (Abs Var) thin = identity_
+  compileFullTerm (Abs Var) thin = identity_
   compileFullTerm (Abs t) thin =
     parens $ group $ hang 2 $
       lambda <++> (parens $ pretty $ index (lenToNat len) names) <+> line <+>
       compileFullTerm t (Keep thin)
-  -- compileFullTerm (App (MakePair (Const t `Over` thin1) (u `Over` thin2) _)) thin =
-  --   compileFullTerm t (thin . thin1)
-  -- compileFullTerm (App (MakePair (Abs Var `Over` thin1) (u `Over` thin2) _)) thin =
-  --   compileFullTerm u (thin . thin2)
+  compileFullTerm (App (MakePair (Const t `Over` thin1) (u `Over` thin2) _)) thin =
+    compileFullTerm t (thin . thin1)
+  compileFullTerm (App (MakePair (Abs Var `Over` thin1) (u `Over` thin2) _)) thin =
+    compileFullTerm u (thin . thin2)
   compileFullTerm (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) thin =
     parens $ group $ align $
       compileFullTerm t (thin . thin1) <+> line <+>
@@ -141,6 +141,7 @@ builtins = """
   (define (squid-div m) (lambda (n) (euclidean-quotient m n)))
   (define (squid-mod m) (lambda (n) (euclidean-remainder m n)))
   (define (squid-identity x) x)
+  (define (squid-const x) (lambda (_) x))
   """
 
 wrap_main : Len ctx => Term ty ctx -> Doc ann
