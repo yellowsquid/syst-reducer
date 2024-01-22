@@ -156,7 +156,6 @@ prettyOp (Inl _ _) = keyword "inl"
 prettyOp (Inr _ _) = keyword "inr"
 prettyOp (Prl _ _) = keyword "prl"
 prettyOp (Prr _ _) = keyword "prr"
-prettyOp (Arb _) = keyword "arb"
 
 parameters (names : Stream String)
   prettyTerm' : (len : Len ctx) => Prec -> Term ty ctx -> Doc Syntax

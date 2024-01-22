@@ -70,7 +70,6 @@ opSem (Inl ty1 ty2) = inl ty1 ty2
 opSem (Inr ty1 ty2) = swap ty2 ty1 . inl ty2 ty1
 opSem (Prl ty1 ty2) = prl ty1 ty2
 opSem (Prr ty1 ty2) = prl ty2 ty1 . swap ty1 ty2
-opSem (Arb ty) = arb ty
 
 %inline
 sem' : Monad m => Term ty ctx -> m (All TypeOf ctx -> TypeOf ty)

@@ -27,7 +27,6 @@ data Operator : List Ty -> Ty -> Type where
   Inr : (ty, ty' : Ty) -> Operator [ty'] (ty <+> ty')
   Prl : (ty, ty' : Ty) -> Operator [ty <+> ty'] ty
   Prr : (ty, ty' : Ty) -> Operator [ty <+> ty'] ty'
-  Arb : (ty : Ty) -> Operator [] ty
 
 %name Operator op
 

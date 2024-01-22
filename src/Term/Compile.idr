@@ -35,10 +35,6 @@ lambda = "lambda"
 lit : Nat -> Doc ann
 lit = pretty
 
-compileArb : Ty -> Doc ann
-compileArb N = pretty 0
-compileArb (ty ~> ty') = parens $ group $ "const" <+> softline <+> compileArb ty'
-
 compileOp : Operator tys ty -> Doc ann
 compileOp (Lit n) = lit n
 compileOp Suc = "1+"
@@ -52,7 +48,6 @@ compileOp (Inl _ _) = identity_
 compileOp (Inr _ _) = identity_
 compileOp (Prl _ _) = identity_
 compileOp (Prr _ _) = identity_
-compileOp (Arb ty) = compileArb ty
 
 parameters (names : Stream String)
   compileFullTerm : (len : Len ctx) => FullTerm ty ctx' -> ctx' `Thins` ctx -> Doc ann

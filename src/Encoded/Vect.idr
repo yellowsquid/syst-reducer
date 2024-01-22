@@ -1,6 +1,7 @@
 module Encoded.Vect
 
 import Data.String
+import Data.Vect
 
 import Encoded.Bool
 import Encoded.Pair
@@ -56,3 +57,13 @@ foldr {k = S k} = Abs $ Abs $ Abs $
   let c = Var (There Here) in
   let xs = Var Here in
   App c [<App xs [<zero], App foldr [<z, c, xs . suc]]
+
+export
+fromVect : {k : Nat} -> {ty : Ty} -> Vect k (Term ty ctx) -> Term (Vect k ty) ctx
+fromVect [] = nil
+fromVect (t :: ts) = App cons [<t, fromVect ts]
+
+export
+toVect : {k : Nat} -> {ty : Ty} -> Term (Vect k ty) ctx -> Vect k (Term ty ctx)
+toVect {k = 0} v = []
+toVect {k = S k} v = App v [<zero] :: toVect (v . suc)

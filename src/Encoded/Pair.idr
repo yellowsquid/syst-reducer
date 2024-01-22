@@ -39,6 +39,11 @@ bimap = Abs $ Abs $ Abs $ Abs $
     ]
 
 export
+mapFst : {ty1, ty1', ty2 : Ty} -> Term ((ty1 ~> ty1') ~> ty1 * ty2 ~> ty1' * ty2) ctx
+mapFst = AbsAll [<_,_] (\[<f, x] =>
+  App pair [<App (f . fst) [<x], App snd [<x]])
+
+export
 mapSnd : {ty1, ty2, ty2' : Ty} -> Term ((ty2 ~> ty2') ~> ty1 * ty2 ~> ty1 * ty2') ctx
 mapSnd = Abs $ Abs $
   let f = Var (There Here) in

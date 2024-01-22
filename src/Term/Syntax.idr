@@ -43,7 +43,8 @@ t `mod` u = App (App (Op Mod) t) u
 
 export
 Arb : {ty : Ty} -> Term ty ctx
-Arb = Op (Arb ty)
+Arb {ty = N} = Op (Lit 0)
+Arb {ty = ty ~> ty'} = Const Arb
 
 export
 inL : {ty1, ty2 : Ty} -> Term (ty1 ~> (ty1 <+> ty2)) ctx
