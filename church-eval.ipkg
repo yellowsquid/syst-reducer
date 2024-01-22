@@ -4,6 +4,9 @@ sourcedir = "src"
 
 options = "--total"
 
+executable = "church-eval"
+main = Encoded.Test
+
 depends = contrib
 
 modules
@@ -13,6 +16,8 @@ modules
   , Encoded.Fin
   , Encoded.Pair
   , Encoded.Sum
+  , Encoded.Term
+  , Encoded.Test
   , Encoded.Vect
   , Term
   , Term.Compile
