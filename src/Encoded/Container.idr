@@ -25,33 +25,31 @@ cons = Abs $ Abs $ Abs $
   let n = Var Here in
   App rec [<n, x, xs . fst]
 
--- Cases -----------------------------------------------------------------------
+-- Entries -----------------------------------------------------------------------
 
 public export
-Case : Type
-Case = (Maybe Ty, Nat)
+Entry : Type
+Entry = (Maybe Ty, Nat)
 
 public export
-semCase : Case -> Ty -> Ty
-semCase (Just tag, k) ty = tag * Vect k ty
-semCase (Nothing, k) ty = Vect k ty
+semEntry : Entry -> Ty -> Ty
+semEntry (Just tag, k) ty = tag * Vect k ty
+semEntry (Nothing, k) ty = Vect k ty
 
-unitCase : Case -> Ty
-unitCase (Just tag, k) = tag
-unitCase (Nothing, k) = N
-
-forgetCase : {c : Case} -> {ty : Ty} -> Term (semCase c ty ~> unitCase c) ctx
-forgetCase {c = (Just tag, k)} = fst
-forgetCase {c = (Nothing, k)} = Arb
-
-dmapCase :
-  {c : Case} ->
+dmapEntry :
+  {c : Entry} ->
   {ty, ty' : Ty} ->
-  Term ((Fin (snd c) ~> ty ~> ty') ~> semCase c ty ~> semCase c ty') ctx
-dmapCase {c = (Just tag, k)} = Abs' (\f => App (mapSnd . dmap) [<f])
-dmapCase {c = (Nothing, k)} = dmap
+  Term ((Fin (snd c) ~> ty ~> ty') ~> semEntry c ty ~> semEntry c ty') ctx
+dmapEntry {c = (Just tag, k)} = Abs' (\f => App (mapSnd . dmap) [<f])
+dmapEntry {c = (Nothing, k)} = dmap
 
-children : {c : Case} -> {ty : Ty} -> Term (semCase c ty ~> Vect (snd c) ty) ctx
+mapEntry :
+  {c : Entry} ->
+  {ty, ty' : Ty} ->
+  Term ((ty ~> ty') ~> semEntry c ty ~> semEntry c ty') ctx
+mapEntry = dmapEntry . Abs' (\f => Const f)
+
+children : {c : Entry} -> {ty : Ty} -> Term (semEntry c ty ~> Vect (snd c) ty) ctx
 children {c = (Just tag, k)} = snd
 children {c = (Nothing, k)} = Id
 
@@ -59,236 +57,154 @@ children {c = (Nothing, k)} = Id
 
 public export
 record Container where
-  constructor Cases
-  constructors : SnocList Case
+  constructor Entries
+  constructors : SnocList Entry
   {auto 0 ok : NonEmpty constructors}
 
 %name Container c
 
 public export
 sem : Container -> Ty -> Ty
-sem c ty = Sum (map (flip semCase ty) c.constructors) @{mapNonEmpty c.ok}
-
-unitSem : Container -> Ty
-unitSem c = Sum (map unitCase c.constructors) @{mapNonEmpty c.ok}
+sem c ty = Sum (map (flip semEntry ty) c.constructors) @{mapNonEmpty c.ok}
 
 -- Fixed Point ----------------------------------------------------------------
 
 export
 W : Container -> Ty
-W c = (N ~> N * unitSem c * N * N)
---          ^   ^- data     ^   ^- stride
---          +- fuel         +- base
+W c = N * N * (N ~> sem c N)
+--    ^   ^- fuel   ^     ^- pointers
+--    +- root       +- data
 
-fuelAt : {c : Container} -> Term (W c ~> N ~> N) ctx
-fuelAt = Abs' (\c => fst . fst . fst . c)
+root : {c : Container} -> Term (W c ~> N) ctx
+root = fst . fst
 
 fuel : {c : Container} -> Term (W c ~> N) ctx
-fuel = Abs' (\c => App fuelAt [<c, 0])
+fuel = snd . fst
 
-vals : {c : Container} -> Term (W c ~> N ~> unitSem c) ctx
-vals = Abs' (\c => snd . fst . fst . c)
+heap : {c : Container} -> Term (W c ~> N ~> sem c N) ctx
+heap = snd
 
-base : {c : Container} -> Term (W c ~> N ~> N) ctx
-base = Abs' (\c => snd . fst . c)
-
-stride : {c : Container} -> Term (W c ~> N ~> N) ctx
-stride = Abs' (\c => snd . c)
-
-calcIndex : Term (N ~> N ~> N ~> N) ctx
-calcIndex = AbsAll [<_,_,_] (\[<base, stride, n] => base + stride * n)
-
+-- Make the given node the root.
 reroot : {c : Container} -> Term (W c ~> N ~> W c) ctx
-reroot = AbsAll [<_,_] (\[<x, n] =>
-  App Container.cons
-    [<App pair
-      [<App pair
-      [<App pair
-      [<App fuelAt [<x, n]
-      , App vals [<x, n]]
-      , 1]
-      , 1]
-    , Abs' (\y =>
-        let base' = shift (App base [<x, n]) in
-        let stride' = shift (App stride [<x, n]) in
-        App
-          (Abs' (\z =>
-            App pair
-            [<App pair
-            [<App pair
-            [<App fuelAt [<shift (shift x), z]
-            , App vals [<shift (shift x), z]]
-            , (App base [<shift (shift x), z] `minus` shift base') `div` shift stride']
-            , App stride [<shift (shift x), z] `div` shift stride']))
-          [<App calcIndex [<base', stride', y]])
-    ])
+reroot = AbsAll [<_,_] (\[<x, i] => App mapFst [<App mapFst [<Const i], x])
 
 -- Introductor -----------------------------------------------------------------
 
 -- Calculates all fuels for a new W value.
 getFuel :
   {cont : Container} ->
-  {c : Case} ->
-  Term (semCase c (W cont) ~> N ~> N) ctx
-getFuel {c = (tag, 0)} =
-  -- One tag in total
-  Const (Const 1)
+  {c : Entry} ->
+  Term (semEntry c (W cont) ~> N) ctx
+getFuel {c = (tag, 0)} = Const 1
 getFuel {c = (tag, k@(S _))} =
-  Abs' (\x =>
-    App Container.cons
-      [<App (App foldr [<Zero, Op Plus] . App map [<Abs' Suc . fuel] . children) [<x] -- total fuel
-      , Abs'
-        (\n =>
-          -- fuel (1 + i + k z) => fuel_i (z)
-          -- The initial (1 +) is a consequence of the cons.
-          let dm = App (divmod' k) [<n] in
-          let z = App fst [<dm] in
-          let i = App snd [<dm] in
-          let child = App (index . children) [<shift x, i] in
-          App fuelAt [<child, z]
-          )])
-  -- App foldr [<Zero, Op Plus] . App map [<Abs' Suc . fuel] . children
+  Abs' (\x => App foldr [<0, max . fuel, App children [<x]])
 
--- Calculates all offsets for a new W value.
--- This gives the base and stride for looking up the _children_ of a node.
+-- Offset
+offset : (k : Nat) -> Term (Fin k ~> N ~> N) ctx
+offset k = AbsAll [<_,_] (\[<i, n] => Suc $ App forget [<i] + (Lit k * n))
 
-getBase :
-  {cont : Container} ->
-  {c : Case} ->
-  Term (semCase c (W cont) ~> N ~> N) ctx
-getBase {c = (tag, 0)} =
-  -- No children, so do not care
-  Arb
-getBase {c = (tag, k@(S _))} =
-  Abs' (\x =>
-    App Container.cons
-      [<1 -- Children are 1, 2, ..., k
-      , Abs'
-        (\n =>
-          -- base (1 + i + k z) => 1 + i + k (base_i z)
-          -- The initial (1 +) is a consequence of the cons.
-          let dm = App (divmod' k) [<n] in
-          let z = App fst [<dm] in
-          let i = App snd [<dm] in
-          let child = App (index . children) [<shift x, i] in
-          Suc (App forget [<i] + Op (Lit k) * App base [<child, z]))
-      ])
-
-getStride :
-  {cont : Container} ->
-  {c : Case} ->
-  Term (semCase c (W cont) ~> N ~> N) ctx
-getStride {c = (tag, 0)} =
-  -- No children, so do not care
-  Arb
-getStride {c = (tag, k@(S _))} =
-  Abs' (\x =>
-    App Container.cons
-      [<1 -- Children are 1, 2, ..., k
-      , Abs'
-        (\n =>
-          -- stride (1 + i + k z) => k (stride_i z)
-          -- The initial (1 +) is a consequence of the cons.
-          let dm = App (divmod' k) [<n] in
-          let z = App fst [<dm] in
-          let i = App snd [<dm] in
-          let child = App (index . children) [<shift x, i] in
-          Suc (Op (Lit k) * App base [<child, z]))
-          ])
+-- Corrects the index of a child heap.
+-- Static argument is the number of heaps being striped.
+-- Dynamic argument is the index of this stripe.
+fixup :
+  {c : Container} ->
+  (k : Nat) -> Term (Fin k ~> sem c N ~> sem c N) ctx
+fixup k =
+  Abs' (\i => Syntax.App (mapAll @{mapNonEmpty c.ok}) (fixEachOne i c.constructors))
+  where
+  fixEachOne :
+    forall ctx.
+    Term (Fin k) ctx ->
+    (sc : SnocList Entry) ->
+    All (\ty => Term ty ctx) (map (\t => t ~> t) $ map (\y => semEntry y N) sc)
+  fixEachOne i [<] = [<]
+  fixEachOne i (sc :< c) = fixEachOne i sc :< App mapEntry [<App (offset k) [<i]]
 
 -- Calculates data map for a new W value.
 getVals :
   {cont : Container} ->
-  {c : Case} ->
+  {c : Entry} ->
   (i : Elem c cont.constructors) ->
-  Term (semCase c (W cont) ~> N ~> unitSem cont) ctx
+  Term (semEntry c (W cont) ~> N ~> sem cont N) ctx
 getVals i {c = (tag', 0)} =
   -- Only the root matters.
-  Abs' (\x => Const $ App (tag @{mapNonEmpty cont.ok} (elemMap unitCase i) . forgetCase) [<x])
-getVals i {c = (tag', k@(S _))} = Abs' (\x =>
-  App Container.cons
-    [< -- Root is first
-      App (tag @{mapNonEmpty cont.ok} (elemMap unitCase i) . forgetCase) [<x]
-    , Abs'
-      (\n =>
-        -- vals (1 + i + k z) => vals_i (z)
+  AbsAll [<semEntry (tag', 0) (W cont), N]
+    (\[<val, _] =>
+      App
+        ( tag @{mapNonEmpty cont.ok} (elemMap (\y => semEntry y N) i)
+        . App mapEntry [<Const Zero])
+        [<val] )
+getVals i {c = (tag', (S k))} =
+  Abs' (\val =>
+    App Container.cons
+      [< -- Make root first
+        App
+          ( tag @{mapNonEmpty cont.ok} (elemMap (\y => semEntry y N) i)
+          . App dmapEntry [<AbsAll [<Fin (S k), W cont]
+              (\[<i, x] => App (offset (S k)) [<i, App root [<x]])])
+          [<val]
+      , Abs' (\n =>
+        -- vals (1 + i + k z) => map (\w => 1 + i + k w) $ vals_i (z)
         -- The initial (1 +) is a consequence of the cons
-        let dm = App (divmod' k) [<n] in
+        let dm = App (divmod' (S k)) [<n] in
         let z = App fst [<dm] in
         let i = App snd [<dm] in
-        let child = App (index . children) [<shift x, i] in
-        App vals [<child, z])
-    ])
+        let child = App (index . children) [<shift val, i] in
+        App (fixup (S k)) [<i, App heap [<child, z]])
+      ])
 
 -- Constructs a value for a specific constructor
-introCase :
+introEntry :
   {cont : Container} ->
-  {c : Case} ->
+  {c : Entry} ->
   (i : Elem c cont.constructors) ->
-  Term (semCase c (W cont) ~> W cont) ctx
-introCase i = AbsAll [<_,_] (\[<x, n] =>
-  App pair
-  [<App pair
-  [<App pair
-  [<App getFuel [<x, n]
-  , App (getVals i) [<x, n]]
-  , App getBase [<x, n]]
-  , App getStride [<x, n]])
+  Term (semEntry c (W cont) ~> W cont) ctx
+introEntry i =
+  Abs' (\val => App pair [<App pair
+    [<0 -- root
+    , App getFuel [<val]]
+    , App (getVals i) [<val]])
 
 export
 intro : {c : Container} -> Term (sem c (W c) ~> W c) ctx
 intro =
-  App (any @{mapNonEmpty c.ok}) {sty = map (~> W c) $ map (flip semCase (W c)) c.constructors} $
-  rewrite mapFusion (~> W c) (flip semCase (W c)) c.constructors in
-  gtabulate introCase
+  App (any @{mapNonEmpty c.ok}) {sty = map (~> W c) $ map (flip semEntry (W c)) c.constructors} $
+  rewrite mapFusion (~> W c) (flip semEntry (W c)) c.constructors in
+  gtabulate introEntry
 
--- Case Splitting --------------------------------------------------------------
-
-fillCase :
-  {c : Case} ->
-  {ty, ty' : Ty} ->
-  Term ((Fin (snd c) ~> ty) ~> (semCase c ty ~> ty') ~> unitCase c ~> ty') ctx
-fillCase {c = (Just tag, k)} = Abs $ Abs $ Abs $
-  let f = Var (There $ There Here) in
-  let sem = Var (There Here) in
-  let val = Var Here in
-  App sem [<App pair [<val, App tabulate [<f]]]
-fillCase {c = (Nothing, k)} =
-  Abs $ Abs $ Const $
-  let f = Var (There Here) in
-  let sem = Var Here in
-  App (sem . tabulate) [<f]
+-- Entry Splitting --------------------------------------------------------------
 
 elimStep :
   {c : Container} ->
   {ty, ty' : Ty} ->
-  Term (map (\c => semCase c ty ~> ty') c.constructors ~>* W c ~> (N ~> ty) ~> (N ~> ty')) ctx
-elimStep = AbsAll (_ :< _ :< _ :< _)
+  Term
+    ( map (\c => semEntry c ty ~> ty') c.constructors ~>*
+      (N ~> sem c N) ~>
+      (N ~> ty) ~>
+      (N ~> ty')
+    ) ctx
+elimStep = AbsAll (_ :< _ :< _)
   -- fs: update action for each constructor
-  -- x : fixed point
+  -- h : heap
   -- f : initial value for each tag
   -- n : tag to compute at
   -- ---
   -- returns updated value for tag
-  (\(fs :< x :< f :< n) =>
-    let val = App vals [<x, n] in
-    let base = App base [<x, n] in
-    let stride = App stride [<x, n] in
-    App (any @{mapNonEmpty c.ok}) {sty = map (~> ty') (map unitCase c.constructors) :< unitSem c} $
-    rewrite mapFusion (~> ty') unitCase c.constructors in
-    gtabulate (\i =>
-      Syntax.App fillCase
-        [<f . App calcIndex [<base, stride] . forget
-        , indexAll (elemMap (\c => semCase c ty ~> ty') i) fs
-        ]) :<
-    val)
+  (\(fs :< h :< f) =>
+    App (any @{mapNonEmpty c.ok}) {sty = map (~> ty') (map (flip semEntry N) c.constructors)}
+      (rewrite mapFusion (~> ty') (flip semEntry N) c.constructors in
+      gtabulate (\i =>
+        indexAll (elemMap (\c => semEntry c ty ~> ty') i) fs .
+        App mapEntry [<f]))
+    . h)
 
 export
 inspect :
   {c : Container} ->
   {ty : Ty} ->
-  Term (map (\c' => semCase c' (W c) ~> ty) c.constructors ~>* W c ~> ty) ctx
-inspect = AbsAll (_ :< _) (\(fs :< x) => App elimStep (fs :< x :< App reroot [<x] :< 0))
+  Term (map (\c' => semEntry c' (W c) ~> ty) c.constructors ~>* W c ~> ty) ctx
+inspect = AbsAll (_ :< _) (\(fs :< x) =>
+  App elimStep (fs :< App heap [<x] :< App reroot [<x] :< App root [<x]))
 
 -- Eliminator ------------------------------------------------------------------
 
@@ -296,11 +212,11 @@ export
 elim :
   {c : Container} ->
   {ty : Ty} ->
-  Term (map (\c => semCase c ty ~> ty) c.constructors ~>* W c ~> ty) ctx
+  Term (map (\c => semEntry c ty ~> ty) c.constructors ~>* W c ~> ty) ctx
 elim = AbsAll (_ :< _)
   (\(fs :< x) =>
     App
       (Rec (App fuel [<x])
         Arb
-        (App elimStep (fs :< x)))
-      [<Zero])
+        (App elimStep (fs :< App heap [<x])))
+      [<App root [<x]])

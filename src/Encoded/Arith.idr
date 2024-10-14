@@ -30,4 +30,8 @@ equal : Term (N ~> N ~> B) ctx
 equal = Abs $ Abs $
   let m = Var $ There Here in
   let n = Var Here in
-  App and [<App lte [<m, n], App lte [<n, m]]
+  and (App lte [<m, n]) (App lte [<n, m])
+
+export
+max : Term (N ~> N ~> N) ctx
+max = AbsAll [<N, N] (\[<x, y] => x + (y `minus` x))

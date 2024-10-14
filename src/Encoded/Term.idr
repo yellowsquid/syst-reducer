@@ -31,7 +31,7 @@ AppVect f (t :: ts) = AppVect (App f t) ts
 -- Definition ------------------------------------------------------------------
 
 TermC : Container
-TermC = Cases
+TermC = Entries
   [<(Just N, 0)  -- Var
   , (Nothing, 0) -- Zero
   , (Nothing, 1) -- Suc
@@ -212,7 +212,7 @@ Inspect = Abs' (\e =>
 -- Weakening -------------------------------------------------------------------
 
 liftNat : Term ((N ~> N) ~> (N ~> N)) ctx
-liftNat = AbsAll [<_,_] (\[<f, n] => App if' [<App isZero [<n], 0, Suc (App f [<n])])
+liftNat = AbsAll [<_,_] (\[<f, n] => if' (App isZero [<n]) 0 (Suc $ App f [<n]))
 
 WeakenElim : Eliminator ((N ~> N) ~> Term) ctx
 WeakenElim =
@@ -231,10 +231,10 @@ weaken = AbsAll [<_,_] (\[<f, t] => App Elim [<pack WeakenElim, t, f])
 
 liftTerm : Term ((N ~> Term) ~> (N ~> Term)) ctx
 liftTerm = AbsAll [<_,_] (\[<f, n] =>
-  App if'
-    [<App isZero [<n]
-    , App Var [<0]
-    , App weaken [<Op Suc, App f [<n]]])
+  if'
+    (App isZero [<n])
+    (App Var [<0])
+    (App weaken [<Op Suc, App f [<n]]))
 
 -- Substitution ----------------------------------------------------------------
 
@@ -267,7 +267,7 @@ AppDisc =
     , abs = AbsAll [<_,_,_] (\[<t, u, b] =>
       App pair
         [<App subst
-          [<Abs' (\n => App if' [<App isZero [<n], shift t, App Var [<pred n]])
+          [<Abs' (\n => if' (App isZero [<n]) (shift t) (App Var [<pred n]))
           , u
           ]
         , True
@@ -319,7 +319,7 @@ StepElim =
         , App fst [<t]
         , App fst [<u]
         , App fst [<v]
-        , App or [<App snd t, App or [<App snd u, App snd v]]
+        , or (App snd t) (or (App snd u) (App snd v))
         ])
     , abs = App mapFst [<Abs]
     , app = AbsAll [<_,_] (\[<t, u] =>
@@ -327,7 +327,7 @@ StepElim =
         [<packDisc AppDisc
         , App fst [<t]
         , App fst [<u]
-        , App or [<App snd [<t], App snd [<u]]
+        , or (App snd [<t]) (App snd [<u])
         ])
     }
 
@@ -338,5 +338,5 @@ reduce = Abs' (\n =>
     Id
     (Abs' (\rec =>
       (Abs' {ty = Term * B} (\ub =>
-        App if' [<App snd [<ub], App (shift rec) [<App fst [<ub]], App fst [<ub]])) .
+        if' (App snd [<ub]) (App (shift rec) [<App fst [<ub]]) (App fst [<ub]))) .
       (App Elim [<pack StepElim]))))

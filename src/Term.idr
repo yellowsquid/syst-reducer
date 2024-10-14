@@ -2,6 +2,8 @@ module Term
 
 import Control.Order
 import Control.Relation
+import Data.Fin
+import Data.Fin.Extra
 import Syntax.PreorderReasoning
 import Syntax.PreorderReasoning.Generic
 
@@ -23,10 +25,6 @@ data Operator : List Ty -> Ty -> Type where
   Minus : Operator [N, N] N
   Div : Operator [N, N] N
   Mod : Operator [N, N] N
-  Inl : (ty, ty' : Ty) -> Operator [ty] (ty <+> ty')
-  Inr : (ty, ty' : Ty) -> Operator [ty'] (ty <+> ty')
-  Prl : (ty, ty' : Ty) -> Operator [ty <+> ty'] ty
-  Prr : (ty, ty' : Ty) -> Operator [ty <+> ty'] ty'
 
 %name Operator op
 
@@ -42,6 +40,7 @@ data FullTerm : Ty -> SnocList Ty -> Type where
     FullTerm ty' ctx
   Op : Operator tys ty -> FullTerm (foldr (~>) ty tys) [<]
   Rec :
+    {ty : Ty} ->
     Pair (FullTerm N) (Pair (FullTerm ty) (FullTerm (ty ~> ty))) ctx ->
     FullTerm ty ctx
 
@@ -65,9 +64,19 @@ namespace Smart
 
   export
   Abs : Term ty' (ctx :< ty) -> Term (ty ~> ty') ctx
-  Abs (t `Over` Id) = Abs t `Over` Id
   Abs (t `Over` Empty) = Const t `Over` Empty
   Abs (t `Over` Drop thin) = Const t `Over` thin
+  -- Prevent eta expansion
+  Abs (App (MakePair (t `Over` Drop thin1) (Var `Over` Keep _) _) `Over` Id) = t `Over` thin1
+  Abs (App (MakePair (t `Over` Drop thin1) (Var `Over` Id) _) `Over` Id) = t `Over` thin1
+  Abs (App (MakePair (t `Over` Empty) (Var `Over` Keep _) _) `Over` Id) = t `Over` Empty
+  Abs (App (MakePair (t `Over` Empty) (Var `Over` Id) _) `Over` Id) = t `Over` Empty
+  Abs (App (MakePair (t `Over` Drop thin1) (Var `Over` Keep _) _) `Over` Keep thin) = t `Over` thin . thin1
+  Abs (App (MakePair (t `Over` Drop thin1) (Var `Over` Id) _) `Over` Keep thin) = t `Over` thin . thin1
+  Abs (App (MakePair (t `Over` Empty) (Var `Over` Keep _) _) `Over` Keep thin) = t `Over` Empty
+  Abs (App (MakePair (t `Over` Empty) (Var `Over` Id) _) `Over` Keep thin) = t `Over` Empty
+  -- Otherwise abstract as normal
+  Abs (t `Over` Id) = Abs t `Over` Id
   Abs (t `Over` Keep thin) = Abs t `Over` thin
 
   export
@@ -79,8 +88,8 @@ namespace Smart
   Op op = Op op `Over` Empty
 
   export
-  Rec : Term N ctx -> Term ty ctx -> Term (ty ~> ty) ctx -> Term ty ctx
-  Rec t u v = map Rec $ MkPair t (MkPair u v)
+  Rec' : {ty : Ty} -> Term N ctx -> Term ty ctx -> Term (ty ~> ty) ctx -> Term ty ctx
+  Rec' t u v = map Rec $ MkPair t (MkPair u v)
 
   --- Properties
 
@@ -115,7 +124,7 @@ namespace Smart
     t1 <~> u1 ->
     t2 <~> u2 ->
     t3 <~> u3 ->
-    Rec t1 t2 t3 <~> Rec u1 u2 u3
+    Rec' t1 t2 t3 <~> Rec' u1 u2 u3
 
 -- Substitution Definition -----------------------------------------------------
 
@@ -272,82 +281,81 @@ compCong prf1 prf2 = irrelevantEquiv $ MkEquivalence (\i => CalcWith $
   ~~ index sub2 (index thin2 i) ...(cong (index sub2) $ prf2.equiv i)
   ~~ index (sub2 . thin2) i     ...(indexHomo sub2 thin2 i))
 
--- Substitution Operation ------------------------------------------------------
-
-fullSubst : FullTerm ty ctx -> Subst ctx ctx' -> Term ty ctx'
-fullSubst Var sub = index sub Here
-fullSubst (Const t) sub = Const (fullSubst t sub)
-fullSubst (Abs t) sub = Abs (fullSubst t $ lift sub)
-fullSubst (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) sub =
-  App (fullSubst t $ sub . thin1) (fullSubst u $ sub . thin2)
-fullSubst (Op op) sub = Op op
-fullSubst
-  (Rec (MakePair
-    (t `Over` thin1)
-    (MakePair (u `Over` thin2) (v `Over` thin3) _ `Over` thin')
-    _))
-  sub =
-  let sub' = sub . thin' in
-  Rec
-    (fullSubst t $ sub . thin1)
-    (fullSubst u $ sub' . thin2)
-    (fullSubst v $ sub' . thin3)
-
-||| Applies a substitution to a term.
-export
-subst : Term ty ctx -> Subst ctx ctx' -> Term ty ctx'
-subst (t `Over` thin) sub = fullSubst t (sub . thin)
-
---- Properties
-
-fullSubstCong :
-  (t : FullTerm ty ctx) ->
-  {0 sub1, sub2 : Subst ctx ctx'} ->
-  sub1 <~> sub2 ->
-  fullSubst t sub1 <~> fullSubst t sub2
-fullSubstCong Var prf = prf.equiv Here
-fullSubstCong (Const t) prf = constCong (fullSubstCong t prf)
-fullSubstCong (Abs t) prf = absCong (fullSubstCong t $ liftCong prf)
-fullSubstCong (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) prf =
-  appCong
-    (fullSubstCong t $ compCong prf reflexive)
-    (fullSubstCong u $ compCong prf reflexive)
-fullSubstCong (Op op) prf = irrelevantEquiv $ reflexive
-fullSubstCong
-  (Rec (MakePair
-    (t `Over` thin1)
-    (MakePair (u `Over` thin2) (v `Over` thin3) _ `Over` thin')
-    _))
-  prf =
-  let prf' = compCong prf reflexive in
-  recCong
-    (fullSubstCong t $ compCong prf reflexive)
-    (fullSubstCong u $ compCong prf' reflexive)
-    (fullSubstCong v $ compCong prf' reflexive)
-
-export
-substCong :
-  {0 t, u : Term ty ctx} ->
-  {0 sub1, sub2 : Subst ctx ctx'} ->
-  t <~> u ->
-  sub1 <~> sub2 ->
-  subst t sub1 <~> subst u sub2
-substCong (UpToThin prf1) prf2 = irrelevantEquiv $ fullSubstCong _ (compCong prf2 prf1)
-
-export
-substBase :
-  (t : Term ty ctx) ->
-  (thin : ctx `Thins` ctx') ->
-  subst t (Base thin) <~> wkn t thin
-
--- export
--- substHomo :
---   (t : Term ty ctx) ->
---   (sub1 : Subst ctx ctx') ->
---   (sub2 : Subst ctx' ctx'') ->
---   subst (subst t sub1) sub2 <~> subst t ?d
-
 -- Utilities -------------------------------------------------------------------
+
+||| Returns `Just k` if `v` occurs less than `n` times in `v`, else `Nothing`
+export
+usedLessThan : (n : Nat) -> (t : Term ty ctx) -> (v : Elem ty' ctx) -> Maybe (Fin n)
+fullUsedLessThan : (n : Nat) -> FullTerm ty ctx -> Elem ty' ctx -> Maybe (Fin n)
+
+usedLessThan 0 (t `Over` thin) i = Nothing
+usedLessThan (S n) (t `Over` thin) i with (preimage thin i)
+  _ | Just j = fullUsedLessThan (S n) t j
+  _ | Nothing = Just FZ
+
+addFin : (k : Fin n) -> (x : Fin (n `minus` finToNat k)) -> Fin n
+addFin k x = natToFinLT (finToNat k + finToNat x) @{prf k x}
+  where
+  prf :
+    forall n. (k : Fin n) -> (x : Fin (n `minus` finToNat k)) ->
+    finToNat k + finToNat x `LT` n
+  prf FZ x = elemSmallerThanBound x
+  prf (FS k) x = LTESucc (prf k x)
+
+-- Used at least once, so needs a Fin 2 or more
+fullUsedLessThan 0 t i = Nothing
+fullUsedLessThan 1 t i = Nothing
+  -- See!
+fullUsedLessThan (S (S n)) Var Here = Just (FS FZ)
+fullUsedLessThan n (Const t) i = fullUsedLessThan n t i
+fullUsedLessThan n (Abs t) i = fullUsedLessThan n t (There i)
+fullUsedLessThan n (App (MakePair t u _)) i = do
+  k <- usedLessThan n t i
+  l <- usedLessThan (n `minus` finToNat k) u i
+  Just (addFin k l)
+fullUsedLessThan
+  n
+  (Rec (MakePair
+    t
+    (MakePair (u `Over` thin1) (v `Over` thin2) _ `Over` thin)
+    _))
+  i = do
+  k1 <- usedLessThan n t i
+
+  let Just i = preimage thin i
+    | Nothing => Just k1
+
+  case (preimage thin1 i, preimage thin2 i) of
+    (Just i1, Just i2) => do
+      k2 <- fullUsedLessThan (n `minus` finToNat k1) u i1
+      k3 <- fullUsedLessThan ((n `minus` finToNat k1) `minus` finToNat k2) v i2
+      Just (addFin k1 (addFin k2 k3))
+    (Just i1, Nothing) => do
+      k2 <- fullUsedLessThan (n `minus` finToNat k1) u i1
+      Just (addFin k1 k2)
+    (Nothing, Just i2) => do
+      k2 <- fullUsedLessThan (n `minus` finToNat k1) v i2
+      Just (addFin k1 k2)
+    (Nothing, Nothing) => Just k1
+
+export
+smallerThan : Nat -> Term ty ctx -> Maybe Nat
+fullSmallerThan : Nat -> FullTerm ty ctx -> Maybe Nat
+
+smallerThan limit (t `Over` thin) = fullSmallerThan limit t
+
+fullSmallerThan Z _ = Nothing
+fullSmallerThan (S limit) Var = Just limit
+fullSmallerThan (S limit) (Const t) = fullSmallerThan limit t
+fullSmallerThan (S limit) (Abs t) = fullSmallerThan limit t
+fullSmallerThan (S limit) (App (MakePair t u _)) = do
+  limit <- smallerThan limit t
+  smallerThan limit u
+fullSmallerThan (S limit) (Op op) = Just limit
+fullSmallerThan (S limit) (Rec (MakePair t (MakePair u v _ `Over` _) _)) = do
+  limit <- smallerThan limit t
+  limit <- smallerThan limit u
+  smallerThan limit v
 
 export
 countUses : Term ty ctx -> Elem ty' ctx -> Nat
@@ -387,3 +395,98 @@ fullSize (Abs t) = S (fullSize t)
 fullSize (App (MakePair t u _)) = S (size t + size u)
 fullSize (Op op) = 1
 fullSize (Rec (MakePair t (MakePair u v _ `Over` _) _)) = S (size t + size u + size v)
+
+export
+shouldExpand : FullTerm ty (ctx :< ty') -> Term ty' ctx' -> Bool
+shouldExpand t u = isJust (smallerThan 1 u) || isJust (fullUsedLessThan 2 t Here)
+
+export
+shouldRec : Nat -> Term (ty ~> ty') ctx -> Bool
+shouldRec n t = isJust $ smallerThan (3 `max` (10 `div` n)) t
+
+-- Substitution Operation ------------------------------------------------------
+
+export
+app : {ty : Ty} -> Term (ty ~> ty') ctx -> Lazy (Term ty ctx) -> Term ty' ctx
+export
+rec : {ty : Ty} -> {default 0 reps : Nat} -> Term N ctx -> Lazy (Term ty ctx) -> Lazy (Term (ty ~> ty) ctx) -> Term ty ctx
+||| Applies a substitution to a term.
+export
+subst : Term ty ctx -> Subst ctx ctx' -> Term ty ctx'
+fullSubst : FullTerm ty ctx -> Subst ctx ctx' -> Term ty ctx'
+
+app (Const t `Over` thin) u = t `Over` thin
+app (Abs t `Over` thin) u =
+  if shouldExpand t u
+  then
+    subst (t `Over` Keep thin) (Base Id :< u)
+  else
+    App (Abs t `Over` thin) u
+app t u = App t u
+
+%inline
+isConst : Term (ty ~> ty') ctx -> Maybe (Term ty' ctx)
+isConst (Const t `Over` thin) = Just (t `Over` thin)
+isConst _ = Nothing
+
+doRec : Nat -> (Lazy a -> a) -> Lazy a -> a
+doRec 0 f x = x
+doRec (S k) f x = doRec k f (f x)
+
+rec (Op (Lit 0) `Over` thin) u v = u
+rec (Op (Lit (S k)) `Over` thin) u v =
+  case isConst v of
+    Just v => v
+    Nothing =>
+      if shouldRec (S k + reps) v
+      then
+        doRec (S k) (app v) u
+      else
+        Rec' (Op (Lit (S k)) `Over` Empty) u v
+rec (App (MakePair (Op Suc `Over` _) t _) `Over` thin) u v =
+  app v (rec {reps = S reps} (assert_smaller t $ wkn t thin) u v)
+rec t u v = Rec' t u v
+
+subst (t `Over` thin) sub = fullSubst t (sub . thin)
+
+fullSubst Var sub = index sub Here
+fullSubst (Const t) sub = Const (fullSubst t sub)
+fullSubst (Abs t) sub = Abs (fullSubst t $ lift sub)
+fullSubst (App (MakePair (t `Over` thin1) (u `Over` thin2) _)) sub =
+  assert_total $
+  app (fullSubst t $ sub . thin1) (fullSubst u $ sub . thin2)
+fullSubst (Op op) sub = Op op
+fullSubst
+  (Rec (MakePair
+    (t `Over` thin1)
+    (MakePair (u `Over` thin2) (v `Over` thin3) _ `Over` thin')
+    _))
+  sub =
+  assert_total $
+  rec
+    (fullSubst t $ sub . thin1)
+    (fullSubst u $ sub . thin' . thin2)
+    (fullSubst v $ sub . thin' . thin3)
+
+--- Properties
+
+fullSubstCong :
+  (t : FullTerm ty ctx) ->
+  {0 sub1, sub2 : Subst ctx ctx'} ->
+  sub1 <~> sub2 ->
+  fullSubst t sub1 <~> fullSubst t sub2
+
+export
+substCong :
+  {0 t, u : Term ty ctx} ->
+  {0 sub1, sub2 : Subst ctx ctx'} ->
+  t <~> u ->
+  sub1 <~> sub2 ->
+  subst t sub1 <~> subst u sub2
+substCong (UpToThin prf1) prf2 = irrelevantEquiv $ fullSubstCong _ (compCong prf2 prf1)
+
+export
+substBase :
+  (t : Term ty ctx) ->
+  (thin : ctx `Thins` ctx') ->
+  subst t (Base thin) <~> wkn t thin

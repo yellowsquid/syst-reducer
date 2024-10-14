@@ -18,6 +18,8 @@ import Term.Pretty
 import Term.Syntax
 import Term.Semantics
 
+import Text.PrettyPrint.Prettyprinter.Render.String
+
 %ambiguity_depth 4
 
 -- ListC : Ty -> Container
@@ -55,14 +57,20 @@ data Mode = Color | NoColor | FastCompile | Compile | Profile
 %inline
 render : Len ctx => Mode -> Term ty ctx -> IO ()
 render Color t =
-  renderIO $
+  Terminal.renderIO $
   layoutSmart layoutOptions $ prettyTerm t
 render NoColor t =
-  putStrLn $
-  renderShow (layoutSmart layoutOptions $ prettyTerm {ann = ()} t) ""
+  String.renderIO $
+  layoutSmart layoutOptions $ prettyTerm {ann = ()} t
 render _ t = pure ()
 
-run : Show (TypeOf ty) => Len ctx => Mode -> Term ty ctx -> All TypeOf ctx -> IO ()
+NeedShow : Mode -> Ty -> Type
+NeedShow FastCompile = const ()
+NeedShow Compile = const ()
+NeedShow Profile = const ()
+NeedShow _ = Show . TypeOf
+
+run : (m : Mode) -> NeedShow m ty => Len ctx => Term ty ctx -> All TypeOf ctx -> IO ()
 run FastCompile t args =
   putStrLn $
   renderShow (layoutCompact $ compileTerm {ann = ()} Run t) ""
@@ -72,15 +80,16 @@ run Compile t args =
 run Profile t args =
   putStrLn $
   renderShow (layoutSmart layoutOptions $ compileTerm {ann = ()} Profile t) ""
-run _ t args = printLn (sem t args)
+run Color t args = printLn (sem t args)
+run NoColor t args = printLn (sem t args)
 
-parseArgs : List String -> IO (Mode, Bool, Nat, Nat)
-parseArgs [_, "--color", k, n] = pure (Color, True, stringToNatOrZ k, stringToNatOrZ n)
-parseArgs [_, "--no-color", k, n] = pure (NoColor, True, stringToNatOrZ k, stringToNatOrZ n)
-parseArgs [_, "--fast-compile", k, n] = pure (FastCompile, False, stringToNatOrZ k, stringToNatOrZ n)
-parseArgs [_, "--compile", k, n] = pure (Compile, False, stringToNatOrZ k, stringToNatOrZ n)
-parseArgs [_, "--profile", k, n] = pure (Profile, False, stringToNatOrZ k, stringToNatOrZ n)
-parseArgs [_, k, n] = pure (Color, False, stringToNatOrZ k, stringToNatOrZ n)
+parseArgs : List String -> IO (Mode, Nat, Nat)
+parseArgs [_, "--color", k, n] = pure (Color, stringToNatOrZ k, stringToNatOrZ n)
+parseArgs [_, "--no-color", k, n] = pure (NoColor, stringToNatOrZ k, stringToNatOrZ n)
+parseArgs [_, "--fast-compile", k, n] = pure (FastCompile, stringToNatOrZ k, stringToNatOrZ n)
+parseArgs [_, "--compile", k, n] = pure (Compile, stringToNatOrZ k, stringToNatOrZ n)
+parseArgs [_, "--profile", k, n] = pure (Profile, stringToNatOrZ k, stringToNatOrZ n)
+parseArgs [_, k, n] = pure (Compile, stringToNatOrZ k, stringToNatOrZ n)
 parseArgs _ = do putStrLn "Bad arguments"; exitFailure
 
 lit : Term (N ~> Term) ctx
@@ -104,12 +113,12 @@ AssumeNat =
 main : IO ()
 main = do
   args <- getArgs
-  (mode, print, k, n) <- parseArgs args
-  let t : Term Term [<] = App add [<Op (Lit k), Op (Lit n)]
-  let t : Term Term [<] = App reduce [<4096, t]
-  if print then render mode t else pure ()
-  let t : Term N [<] = App Elim [<pack AssumeNat, t]
-  run mode t [<]
+  (mode, k, n) <- parseArgs args
+  -- printLn (size $ reduce {ctx = [<]})
+  render {ctx = [<]} mode reduce
+
+  -- let t : Term Term [<] = App reduce [<65536, App add [<2, 3]]
+  -- run FastCompile t [<]
 
   -- let ns = take n nats
   -- let t : Term (List N) [<] = fromList ns

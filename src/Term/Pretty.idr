@@ -152,10 +152,10 @@ prettyOp Pred = keyword "pred"
 prettyOp Minus = keyword "minus"
 prettyOp Div = keyword "div"
 prettyOp Mod = keyword "mod"
-prettyOp (Inl _ _) = keyword "inl"
-prettyOp (Inr _ _) = keyword "inr"
-prettyOp (Prl _ _) = keyword "prl"
-prettyOp (Prr _ _) = keyword "prr"
+-- prettyOp (Inl _ _) = keyword "inl"
+-- prettyOp (Inr _ _) = keyword "inr"
+-- prettyOp (Prl _ _) = keyword "prl"
+-- prettyOp (Prr _ _) = keyword "prr"
 
 parameters (names : Stream String)
   prettyTerm' : (len : Len ctx) => Prec -> Term ty ctx -> Doc Syntax
@@ -195,12 +195,12 @@ parameters (names : Stream String)
       (S k, doc <+> comma <++> bound (pretty $ index k names))
 
   prettySpline d
-    s@(MkSpline (Rec (MakePair t (MakePair u v _ `Over` thin2) _) `Over` thin1) args) =
+    (MkSpline (Rec (MakePair t (MakePair u v _ `Over` thin2) _) `Over` thin1) args) =
       parenthesise (d >= appPrec) $ group $ align $ hang 2 $
-        (rec_ <++> prettyTerm' appPrec (assert_smaller s $ wkn t thin1)) <+> line <+>
+        (rec_ <++> assert_total (prettyTerm' appPrec (wkn t thin1))) <+> line <+>
         vsep
-          ([prettyTerm' appPrec (assert_smaller s $ wkn u (thin1 . thin2))
-          , prettyTerm' appPrec (assert_smaller s $ wkn v (thin1 . thin2))] ++
+          ([assert_total $ prettyTerm' appPrec (wkn u (thin1 . thin2))
+          , assert_total $ prettyTerm' appPrec (wkn v (thin1 . thin2))] ++
             toList (forget $ mapProperty (assert_total $ prettyTerm' appPrec) args))
   prettySpline d s@(MkSpline t args) =
     parenthesise (d >= appPrec) $ group $ align $ hang 2 $

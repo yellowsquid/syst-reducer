@@ -44,10 +44,10 @@ compileOp Pred = "1-" -- Confusing name, but correct
 compileOp Minus = "squid-minus"
 compileOp Div = "squid-div"
 compileOp Mod = "squid-mod"
-compileOp (Inl _ _) = identity_
-compileOp (Inr _ _) = identity_
-compileOp (Prl _ _) = identity_
-compileOp (Prr _ _) = identity_
+-- compileOp (Inl _ _) = identity_
+-- compileOp (Inr _ _) = identity_
+-- compileOp (Prl _ _) = identity_
+-- compileOp (Prr _ _) = identity_
 
 parameters (names : Stream String)
   compileFullTerm : (len : Len ctx) => FullTerm ty ctx' -> ctx' `Thins` ctx -> Doc ann

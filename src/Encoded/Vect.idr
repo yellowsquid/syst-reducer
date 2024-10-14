@@ -52,11 +52,8 @@ index = Id
 export
 foldr : {k : Nat} -> {ty, ty' : Ty} -> Term (ty' ~> (ty ~> ty' ~> ty') ~> Vect k ty ~> ty') ctx
 foldr {k = 0} = Abs $ Const $ Const $ Var Here
-foldr {k = S k} = Abs $ Abs $ Abs $
-  let z = Var (There $ There Here) in
-  let c = Var (There Here) in
-  let xs = Var Here in
-  App c [<App xs [<zero], App foldr [<z, c, xs . suc]]
+foldr {k = S k} = AbsAll [<ty', ty ~> ty' ~> ty', Vect (S k) ty]
+  (\[<z, c, xs] => App c [<App xs [<zero], App foldr [<z, c, xs . suc]])
 
 export
 fromVect : {k : Nat} -> {ty : Ty} -> Vect k (Term ty ctx) -> Term (Vect k ty) ctx

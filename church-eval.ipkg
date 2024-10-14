@@ -18,6 +18,7 @@ modules
   , Encoded.Sum
   , Encoded.Term
   , Encoded.Test
+  , Encoded.Union
   , Encoded.Vect
   , Term
   , Term.Compile

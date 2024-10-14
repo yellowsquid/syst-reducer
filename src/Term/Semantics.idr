@@ -37,24 +37,24 @@ arb : (ty : Ty) -> TypeOf ty
 arb N = 0
 arb (ty ~> ty') = const (arb ty')
 
-swap : (ty1, ty2 : Ty) -> TypeOf (ty1 <+> ty2) -> TypeOf (ty2 <+> ty1)
-swap N N = id
-swap N (ty2 ~> ty2') = (swap N ty2' .)
-swap (ty1 ~> ty1') N = (swap ty1' N .)
-swap (ty1 ~> ty1') (ty2 ~> ty2') = (swap ty1' ty2' .) . (. swap ty2 ty1)
+-- swap : (ty1, ty2 : Ty) -> TypeOf (ty1 <+> ty2) -> TypeOf (ty2 <+> ty1)
+-- swap N N = id
+-- swap N (ty2 ~> ty2') = (swap N ty2' .)
+-- swap (ty1 ~> ty1') N = (swap ty1' N .)
+-- swap (ty1 ~> ty1') (ty2 ~> ty2') = (swap ty1' ty2' .) . (. swap ty2 ty1)
 
-inl : (ty1, ty2 : Ty) -> TypeOf ty1 -> TypeOf (ty1 <+> ty2)
-prl : (ty1, ty2 : Ty) -> TypeOf (ty1 <+> ty2) -> TypeOf ty1
+-- inl : (ty1, ty2 : Ty) -> TypeOf ty1 -> TypeOf (ty1 <+> ty2)
+-- prl : (ty1, ty2 : Ty) -> TypeOf (ty1 <+> ty2) -> TypeOf ty1
 
-inl N N = id
-inl N (ty2 ~> ty2') = const . inl N ty2'
-inl (ty1 ~> ty1') N = (inl ty1' N .)
-inl (ty1 ~> ty1') (ty2 ~> ty2') = (inl ty1' ty2' .) . (. prl ty1 ty2)
+-- inl N N = id
+-- inl N (ty2 ~> ty2') = const . inl N ty2'
+-- inl (ty1 ~> ty1') N = (inl ty1' N .)
+-- inl (ty1 ~> ty1') (ty2 ~> ty2') = (inl ty1' ty2' .) . (. prl ty1 ty2)
 
-prl N N = id
-prl N (ty2 ~> ty2') = prl N ty2' . ($ arb ty2)
-prl (ty1 ~> ty1') N = (prl ty1' N .)
-prl (ty1 ~> ty1') (ty2 ~> ty2') = (prl ty1' ty2' .) . (. inl ty1 ty2)
+-- prl N N = id
+-- prl N (ty2 ~> ty2') = prl N ty2' . ($ arb ty2)
+-- prl (ty1 ~> ty1') N = (prl ty1' N .)
+-- prl (ty1 ~> ty1') (ty2 ~> ty2') = (prl ty1' ty2' .) . (. inl ty1 ty2)
 
 %inline
 opSem : Operator tys ty -> TypeOf (foldr (~>) ty tys)
@@ -66,10 +66,10 @@ opSem Pred = pred
 opSem Minus = minus
 opSem Div = div
 opSem Mod = mod
-opSem (Inl ty1 ty2) = inl ty1 ty2
-opSem (Inr ty1 ty2) = swap ty2 ty1 . inl ty2 ty1
-opSem (Prl ty1 ty2) = prl ty1 ty2
-opSem (Prr ty1 ty2) = prl ty2 ty1 . swap ty1 ty2
+-- opSem (Inl ty1 ty2) = inl ty1 ty2
+-- opSem (Inr ty1 ty2) = swap ty2 ty1 . inl ty2 ty1
+-- opSem (Prl ty1 ty2) = prl ty1 ty2
+-- opSem (Prr ty1 ty2) = prl ty2 ty1 . swap ty1 ty2
 
 %inline
 sem' : Monad m => Term ty ctx -> m (All TypeOf ctx -> TypeOf ty)

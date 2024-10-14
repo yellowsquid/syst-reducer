@@ -1,6 +1,7 @@
 module Encoded.Fin
 
 import public Data.Nat
+import public Data.Vect
 
 import Data.Stream
 import Encoded.Arith

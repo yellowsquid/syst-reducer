@@ -15,23 +15,20 @@ False : Term B ctx
 False = 1
 
 export
-if' : Term (B ~> ty ~> ty ~> ty) ctx
-if' = Abs' (\b =>
-  Rec b
-    (Abs $ Const $ Var Here)
-    (Const $ Const $ Abs $ Var Here))
+if' : {ty : Ty} -> Term B ctx -> Term ty ctx -> Term ty ctx -> Term ty ctx
+if' b t f = Rec b t (Const f)
 
 export
-and : Term (B ~> B ~> B) ctx
-and = Abs' (\b => App if' [<b, Id, Const False])
+and : Term B ctx -> Term B ctx -> Term B ctx
+and b1 b2 = if' b1 b2 False
 
 export
-or : Term (B ~> B ~> B) ctx
-or = Abs' (\b => App if' [<b, Const True, Id])
+or : Term B ctx -> Term B ctx -> Term B ctx
+or b1 b2 = if' b1 True b2
 
 export
 not : Term (B ~> B) ctx
-not = Abs' (\b => App if' [<b, False, True])
+not = Abs' (\b => if' b False True)
 
 export
 isZero : Term (N ~> B) ctx

@@ -1,6 +1,7 @@
 module Encoded.Pair
 
 import Encoded.Bool
+import Encoded.Union
 import Term.Syntax
 
 export
@@ -13,7 +14,7 @@ pair = Abs $ Abs $ Abs $
   let t = Var (There $ There Here) in
   let u = Var (There Here) in
   let b = Var Here in
-  App if' [<b, App inL [<t], App inR [<u]]
+  if' b (App inL [<t]) (App inR [<u])
 
 export
 fst : {ty1, ty2 : Ty} -> Term ((ty1 * ty2) ~> ty1) ctx
@@ -32,11 +33,10 @@ bimap = Abs $ Abs $ Abs $ Abs $
   let g = Var (There $ There Here) in
   let x = Var (There $ Here) in
   let b = Var Here in
-  App if'
-    [<b
-    , App (inL . f . prL . x) [<True]
-    , App (inR . g . prR . x) [<False]
-    ]
+  if'
+    b
+    (App (inL . f . prL . x) [<True])
+    (App (inR . g . prR . x) [<False])
 
 export
 mapFst : {ty1, ty1', ty2 : Ty} -> Term ((ty1 ~> ty1') ~> ty1 * ty2 ~> ty1' * ty2) ctx

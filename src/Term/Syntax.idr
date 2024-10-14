@@ -1,9 +1,15 @@
 module Term.Syntax
 
+import public Data.Fin
+import public Data.Maybe
 import public Data.SnocList
 import public Term
 
 %prefix_record_projections off
+
+export
+Rec : {ty : Ty} -> Term N ctx -> Term ty ctx -> Term (ty ~> ty) ctx -> Term ty ctx
+Rec t u v = rec t u v
 
 -- Combinators
 
@@ -20,10 +26,14 @@ Suc : Term N ctx -> Term N ctx
 Suc t = App (Op Suc) t
 
 export
+Lit : Nat -> Term N ctx
+Lit = Op . Lit
+
+export
 Num (Term N ctx) where
   t + u = App (App (Op Plus) t) u
   t * u = App (App (Op Mult) t) u
-  fromInteger = Op . Lit . fromInteger
+  fromInteger = Lit . fromInteger
 
 export
 pred : Term N ctx -> Term N ctx
@@ -46,22 +56,6 @@ Arb : {ty : Ty} -> Term ty ctx
 Arb {ty = N} = Op (Lit 0)
 Arb {ty = ty ~> ty'} = Const Arb
 
-export
-inL : {ty1, ty2 : Ty} -> Term (ty1 ~> (ty1 <+> ty2)) ctx
-inL = Op (Inl ty1 ty2)
-
-export
-inR : {ty1, ty2 : Ty} -> Term (ty2 ~> (ty1 <+> ty2)) ctx
-inR = Op (Inr ty1 ty2)
-
-export
-prL : {ty1, ty2 : Ty} -> Term ((ty1 <+> ty2) ~> ty1) ctx
-prL = Op (Prl ty1 ty2)
-
-export
-prR : {ty1, ty2 : Ty} -> Term ((ty1 <+> ty2) ~> ty2) ctx
-prR = Op (Prr ty1 ty2)
-
 -- HOAS
 
 infixr 4 ~>*
@@ -77,7 +71,7 @@ Abs' f = Abs (f $ Var Here)
 export
 App : {sty : SnocList Ty} -> Term (sty ~>* ty) ctx -> All (flip Term ctx) sty -> Term ty ctx
 App t [<] = t
-App t (us :< u) = App (App t us) u
+App t (us :< u) = app (App t us) u
 
 export
 AbsAll :

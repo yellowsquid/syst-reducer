@@ -4,6 +4,7 @@ import public Data.SnocList.Operations
 
 import Encoded.Bool
 import Encoded.Pair
+import Encoded.Union
 import Term.Syntax
 
 -- Binary Sums -----------------------------------------------------------------
@@ -23,11 +24,10 @@ right = Abs' (\t => App pair [<False, App inR [<t]])
 export
 case' : {ty1, ty2, ty : Ty} -> Term ((ty1 + ty2) ~> (ty1 ~> ty) ~> (ty2 ~> ty) ~> ty) ctx
 case' = Abs' (\t =>
-  App if'
-    [<App fst [<t]
-    , Abs $ Const $ App (Var Here . prL . snd) [<shift t]
-    , Const $ Abs $ App (Var Here . prR . snd) [<shift t]
-    ])
+  if'
+    (App fst [<t])
+    (Abs $ Const $ App (Var Here . prL . snd) [<shift t])
+    (Const $ Abs $ App (Var Here . prR . snd) [<shift t]))
 
 export
 either : {ty1, ty2, ty : Ty} -> Term ((ty1 ~> ty) ~> (ty2 ~> ty) ~> (ty1 + ty2) ~> ty) ctx
@@ -36,6 +36,12 @@ either = Abs $ Abs $ Abs $
   let g = Var $ There Here in
   let x = Var Here in
   App case' [<x, f, g]
+
+export
+bimap :
+  {ty1, ty2, ty3, ty4 : Ty} ->
+  Term ((ty1 ~> ty3) ~> (ty2 ~> ty4) ~> (ty1 + ty2) ~> (ty3 + ty4)) ctx
+bimap = AbsAll [<_,_] (\[<f, g] => App either [<left . f, right . g])
 
 -- N-ary Sums ------------------------------------------------------------------
 
@@ -62,6 +68,17 @@ any {sty = sty :< ty'' :< ty'} =
     let g = Var Here in
     App either [<App rec [<f], g]) .:
   any {sty = sty :< ty''}
+
+-- Only maps within a single type
+export
+mapAll :
+  {sty : SnocList Ty} ->
+  {auto 0 ok : NonEmpty sty} ->
+  Term (map (\t => t ~> t) sty ~>* Sum sty ~> Sum sty) ctx
+mapAll {sty = [<ty']} = Id
+mapAll {sty = sty :< ty'' :< ty'} =
+  AbsAll [<_, _, _] (\[<f, g, h] => App Sum.bimap [<App f [<g], h]) .:
+  mapAll {sty = sty :< ty''}
 
 export
 tag :
